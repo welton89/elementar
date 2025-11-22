@@ -9,6 +9,7 @@ import React, {
     useEffect,
     useState
 } from 'react';
+import { CachedRoom, cacheService } from '../services/CacheService';
 import { MURAL_STATE_EVENT_TYPE, RoomListContextType, SimpleRoom } from '../types/rooms';
 import { useAuth } from './AuthContext';
 
@@ -51,12 +52,7 @@ const mapMatrixRoomToSimpleRoom = (room: Room, client: any): SimpleRoom => {
         }
     }
 
-    console.log(`Room ${room.name}:`, {
-        isDirect,
-        memberCount,
-        roomId: room.roomId,
-        hasAvatar: !!avatarUrl
-    });
+
 
     // Se for DM, pega o status de presença do outro usuário
     let userPresence: 'online' | 'offline' | 'unavailable' | undefined;
@@ -67,12 +63,7 @@ const mapMatrixRoomToSimpleRoom = (room: Room, client: any): SimpleRoom => {
             const user = client.getUser(otherMember.userId);
             const presence = user?.presence;
 
-            console.log(`DM with ${otherMember.userId}:`, {
-                presence,
-                user: user ? 'found' : 'not found',
-                lastActiveAgo: user?.lastActiveAgo,
-                currentlyActive: user?.currentlyActive
-            });
+
 
             if (presence === 'online') {
                 userPresence = 'online';
@@ -163,6 +154,8 @@ export const RoomListProvider: React.FC<RoomListProviderProps> = ({ children }) 
     const [joinedRooms, setJoinedRooms] = useState<SimpleRoom[]>([]);
     const [invitedRooms, setInvitedRooms] = useState<SimpleRoom[]>([]);
     const [isRoomsLoading, setIsRoomsLoading] = useState(false);
+    const [isLoadingFromCache, setIsLoadingFromCache] = useState(true);
+    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
     /**
      * Função principal para buscar e processar as salas do cliente.
@@ -197,15 +190,60 @@ export const RoomListProvider: React.FC<RoomListProviderProps> = ({ children }) 
             setJoinedRooms(joined);
             setInvitedRooms(invites);
 
+            // Salva no cache
+            const cachedRooms: CachedRoom[] = joined.map(room => ({
+                roomId: room.roomId,
+                name: room.name,
+                avatarUrl: room.avatarUrl || null,
+                lastMessage: null, // SimpleRoom doesn't have this
+                lastMessageTime: null, // SimpleRoom doesn't have this
+                unreadCount: room.unreadNotifications,
+                memberCount: room.memberCount,
+                isMural: room.isMural || false,
+            }));
+            cacheService.saveRooms(cachedRooms).catch(err =>
+                console.error('Error saving rooms to cache:', err)
+            );
+
         } catch (error) {
             console.error('Erro ao carregar salas:', error);
             setJoinedRooms([]);
             setInvitedRooms([]);
         } finally {
             setIsRoomsLoading(false);
+            setInitialLoadComplete(true);
         }
     }, [client]);
 
+
+    // Load cached rooms on mount
+    useEffect(() => {
+        const loadCachedRooms = async () => {
+            try {
+                const cachedRooms = await cacheService.getRooms();
+                if (cachedRooms && cachedRooms.length > 0) {
+
+                    // Convert CachedRoom to SimpleRoom
+                    const simpleRooms: SimpleRoom[] = cachedRooms.map(room => ({
+                        roomId: room.roomId,
+                        name: room.name,
+                        avatarUrl: room.avatarUrl,
+                        memberCount: room.memberCount,
+                        unreadNotifications: room.unreadCount,
+                        highlightNotifications: false,
+                        isMural: room.isMural,
+                    }));
+                    setJoinedRooms(simpleRooms);
+                }
+            } catch (error) {
+                console.error('Error loading cached rooms:', error);
+            } finally {
+                setIsLoadingFromCache(false);
+            }
+        };
+
+        loadCachedRooms();
+    }, []);
 
     // -----------------------------------------------------------------------------
     // 4. LISTENERS DE SINCRONIZAÇÃO
@@ -213,13 +251,13 @@ export const RoomListProvider: React.FC<RoomListProviderProps> = ({ children }) 
 
     useEffect(() => {
         if (!client || !isLoggedIn) {
-            loadRooms();
+            // Se não estiver logado, não tenta carregar do servidor, mas mantém o que tiver no cache visualmente
             return;
         }
 
         const syncListener = (state: string, prevState: string) => {
             if (state === 'PREPARED' && prevState === null) {
-                console.log("Sync PREPARED. Carregando lista inicial de salas...");
+
                 loadRooms();
             }
         };
@@ -233,19 +271,14 @@ export const RoomListProvider: React.FC<RoomListProviderProps> = ({ children }) 
         const receiptListener = (event: any, room: Room) => {
             // Quando um recibo é recebido (seja nosso ou de outro), atualizamos a sala
             // Isso garante que se lermos em outro lugar, ou aqui mesmo, o contador atualize
-            console.log(`DEBUG: Recibo recebido na sala ${room.name}, atualizando lista...`);
+
             loadRooms();
         };
 
         // Listener para mudanças de presença (atualiza status online/offline)
         const presenceListener = (event: any, user: any) => {
             // Log para debug
-            console.log('🟢 Evento de presença recebido:', {
-                userId: user?.userId,
-                presence: user?.presence,
-                lastActiveAgo: user?.lastActiveAgo,
-                currentlyActive: user?.currentlyActive
-            });
+
 
             // Atualiza a lista quando a presença de um usuário muda
             loadRooms();
@@ -280,6 +313,8 @@ export const RoomListProvider: React.FC<RoomListProviderProps> = ({ children }) 
         joinedRooms,
         invitedRooms,
         isRoomsLoading,
+        isLoadingFromCache,
+        initialLoadComplete,
         loadRooms,
     };
 

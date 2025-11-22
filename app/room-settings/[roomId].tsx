@@ -50,6 +50,8 @@ export default function RoomSettingsScreen() {
     const [recentUsers, setRecentUsers] = useState<string[]>([]);
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isLeaving, setIsLeaving] = useState(false);
 
     useEffect(() => {
         if (!client || !roomId) return;
@@ -296,6 +298,90 @@ export default function RoomSettingsScreen() {
         );
     };
 
+    const handleDeleteRoom = () => {
+        Alert.alert(
+            'Apagar Sala',
+            `Tem certeza que deseja apagar "${roomName}"? Esta ação não pode ser desfeita. Todos os membros serão removidos.`,
+            [
+                {
+                    text: 'Cancelar',
+                    style: 'cancel'
+                },
+                {
+                    text: 'Apagar',
+                    style: 'destructive',
+                    onPress: async () => {
+                        if (!client || !roomId) return;
+
+                        setIsDeleting(true);
+                        try {
+                            // 1. Kick all members except yourself (if you're admin)
+                            const membersToKick = members.filter(m => m.userId !== currentUserId);
+
+                            for (const member of membersToKick) {
+                                try {
+                                    await client.kick(roomId, member.userId, 'Sala apagada pelo administrador');
+                                    console.log(`Kicked ${member.userId}`);
+                                } catch (error) {
+                                    console.error(`Failed to kick ${member.userId}:`, error);
+                                    // Continue even if kicking fails
+                                }
+                            }
+
+                            // 2. Leave the room
+                            await client.leave(roomId);
+
+                            // 3. Forget the room (removes from your list)
+                            await client.forget(roomId);
+
+                            Alert.alert('Sucesso', 'Sala apagada com sucesso! Todos os membros foram removidos.');
+                            router.replace('/');
+                        } catch (error: any) {
+                            console.error('Error deleting room:', error);
+                            Alert.alert('Erro', `Falha ao apagar a sala: ${error.message || 'Erro desconhecido'}`);
+                        } finally {
+                            setIsDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleLeaveRoom = () => {
+        Alert.alert(
+            'Sair da Sala',
+            `Tem certeza que deseja sair de "${roomName}"?`,
+            [
+                {
+                    text: 'Cancelar',
+                    style: 'cancel'
+                },
+                {
+                    text: 'Sair',
+                    style: 'destructive',
+                    onPress: async () => {
+                        if (!client || !roomId) return;
+
+                        setIsLeaving(true);
+                        try {
+                            await client.leave(roomId);
+                            await client.forget(roomId);
+
+                            Alert.alert('Sucesso', 'Você saiu da sala.');
+                            router.replace('/');
+                        } catch (error: any) {
+                            console.error('Error leaving room:', error);
+                            Alert.alert('Erro', `Falha ao sair da sala: ${error.message || 'Erro desconhecido'}`);
+                        } finally {
+                            setIsLeaving(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderMember = ({ item }: { item: RoomMember }) => (
         <View style={[styles.memberItem, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
             <View style={styles.memberInfo}>
@@ -435,6 +521,58 @@ export default function RoomSettingsScreen() {
                         scrollEnabled={false}
                     />
                 </View>
+
+                {/* Danger Zone - Only for Admins */}
+                {currentUserPowerLevel >= 100 && (
+                    <View style={[styles.section, styles.dangerSection]}>
+                        <Text style={[styles.sectionTitle, { color: '#ff3b30' }]}>Zona de Perigo</Text>
+
+                        <TouchableOpacity
+                            style={[styles.deleteButton, { opacity: isDeleting ? 0.5 : 1 }]}
+                            onPress={handleDeleteRoom}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <Ionicons name="trash-outline" size={20} color="#fff" />
+                                    <Text style={styles.deleteButtonText}>Apagar Sala</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <Text style={[styles.warningText, { color: theme.textSecondary }]}>
+                            Esta ação não pode ser desfeita. Você sairá da sala e ela será removida da sua lista.
+                        </Text>
+                    </View>
+                )}
+
+                {/* Leave Room - For Non-Admins */}
+                {currentUserPowerLevel < 100 && (
+                    <View style={[styles.section, styles.leaveSection]}>
+                        <Text style={[styles.sectionTitle, { color: '#ff9500' }]}>Sair da Sala</Text>
+
+                        <TouchableOpacity
+                            style={[styles.leaveButton, { opacity: isLeaving ? 0.5 : 1 }]}
+                            onPress={handleLeaveRoom}
+                            disabled={isLeaving}
+                        >
+                            {isLeaving ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <>
+                                    <Ionicons name="exit-outline" size={20} color="#fff" />
+                                    <Text style={styles.leaveButtonText}>Sair da Sala</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+
+                        <Text style={[styles.warningText, { color: theme.textSecondary }]}>
+                            Você sairá da sala e ela será removida da sua lista.
+                        </Text>
+                    </View>
+                )}
             </ScrollView>
 
             {/* Invite Bottom Sheet */}
@@ -846,5 +984,50 @@ const styles = StyleSheet.create({
     userIdText: {
         fontSize: 14,
         marginTop: 2,
+    },
+    dangerSection: {
+        backgroundColor: 'rgba(255, 59, 48, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 59, 48, 0.3)',
+    },
+    deleteButton: {
+        backgroundColor: '#ff3b30',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 8,
+        gap: 8,
+        marginBottom: 12,
+    },
+    deleteButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    warningText: {
+        fontSize: 12,
+        textAlign: 'center',
+        fontStyle: 'italic',
+    },
+    leaveSection: {
+        backgroundColor: 'rgba(255, 149, 0, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 149, 0, 0.3)',
+    },
+    leaveButton: {
+        backgroundColor: '#ff9500',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 8,
+        gap: 8,
+        marginBottom: 12,
+    },
+    leaveButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

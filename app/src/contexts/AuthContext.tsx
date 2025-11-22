@@ -14,6 +14,7 @@ import {
     clearClientInstance,
     getClientInstance
 } from '../api/client';
+import { notificationService } from '../services/NotificationService';
 import {
     AuthContextType,
     SessionData
@@ -32,14 +33,14 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-    console.log('🚀 [DEBUG] AuthProvider rendering');
+
     const [client, setClient] = useState<MatrixClient | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(true);
     const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
     const isLoggedIn = !!client;
 
     useEffect(() => {
-        console.log('🚀 [DEBUG] AuthProvider mounted');
+
     }, []);
 
     const saveSession = useCallback(async (data: SessionData) => {
@@ -70,84 +71,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 password: password,
             });
 
+            // Limpar a instância temporária antes de criar a autenticada
+            await clearClientInstance();
+
+            const newClient = getClientInstance(
+                homeserver,
+                response.access_token,
+                response.user_id,
+                response.device_id || 'UNKNOWN'
+            );
+
+            // Busca perfil do usuário IMEDIATAMENTE após login
+            let avatarUrl = null;
+            let displayName = null;
+            try {
+                const profile = await newClient.getProfileInfo(response.user_id);
+                avatarUrl = profile.avatar_url || null;
+                displayName = profile.displayname || null;
+                setUserAvatarUrl(avatarUrl);
+            } catch (e) {
+                console.warn("Erro ao buscar perfil no login:", e);
+            }
+
             const sessionData: SessionData = {
                 homeserverUrl: homeserver,
                 userId: response.user_id,
                 accessToken: response.access_token,
                 deviceId: response.device_id || 'UNKNOWN',
+                avatarUrl,
+                displayName
             };
 
-            // Limpar a instância temporária antes de criar a autenticada
-            await clearClientInstance();
-
-            const newClient = getClientInstance(
-                sessionData.homeserverUrl,
-                sessionData.accessToken,
-                sessionData.userId,
-                sessionData.deviceId
-            );
-
             await saveSession(sessionData);
-
-            // ⭐️ E2EE TEMPORARIAMENTE DESABILITADO
-            // Motivo: initRustCrypto requer IndexedDB, que não existe no React Native
-            // Aguardando suporte oficial: https://github.com/matrix-org/matrix-js-sdk/issues/3995
-            // TODO: Reativar quando suporte RN estiver disponível
-            /*
-            if ((newClient as any).initRustCrypto) {
-                console.log("DEBUG: Inicializando E2EE/Criptografia (Rust)...");
-                try {
-                    await (newClient as any).initRustCrypto();
-                    console.log("DEBUG: Criptografia inicializada com sucesso!");
-                } catch (cryptoError) {
-                    console.error("ALERTA E2EE: Falha ao inicializar criptografia (Rust):", cryptoError);
-                }
-            } else if ((newClient as any).initCrypto) {
-                 console.log("DEBUG: Inicializando E2EE/Criptografia (Legacy)...");
-                 try {
-                    await (newClient as any).initCrypto();
-                 } catch (cryptoError) {
-                    console.error("ALERTA E2EE: Falha ao inicializar criptografia (Legacy):", cryptoError);
-                 }
-            } else {
-                console.warn("ALERTA E2EE: Nenhum método de inicialização de criptografia encontrado.");
-            }
-            */
-            // ⭐️ E2EE DESABILITADO - Requer WebAssembly (não disponível no React Native)
-            // Aguardando migração para react-native-matrix-sdk
-            /*
-            try {
-                await newClient.initRustCrypto({
-                    useIndexedDB: false
-                });
-                console.log("✅ E2EE habilitado");
-            } catch (cryptoError) {
-                console.error("❌ Falha ao inicializar E2EE:", cryptoError);
-            }
-            */
 
             // Inicia o cliente com tracking de presença habilitado
             await newClient.startClient({
                 initialSyncLimit: 10,
-                // Habilita tracking de presença para ver status online/offline
                 lazyLoadMembers: false,
             });
 
             // Define nossa própria presença como online
             try {
                 await newClient.setPresence({ presence: 'online' as any });
-                console.log('✅ Presença definida como online');
             } catch (e) {
                 console.warn('⚠️ Erro ao definir presença:', e);
             }
 
-            // Busca perfil do usuário
-            try {
-                const profile = await newClient.getProfileInfo(sessionData.userId);
-                setUserAvatarUrl(profile.avatar_url || null);
-            } catch (e) {
-                console.warn("Erro ao buscar perfil:", e);
-            }
+            // Configura serviço de notificação
+            notificationService.setClient(newClient);
+            await notificationService.requestPermissions();
 
             setClient(newClient);
 
@@ -163,7 +135,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const logout = useCallback(async () => {
         if (client) {
             try {
-                // Tenta fazer logout no servidor antes de destruir a sessão local
                 await client.logout();
             } catch (error) {
                 console.warn('Matrix logout failed, performing local clear:', error);
@@ -185,6 +156,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 if (storedSession) {
                     const sessionData: SessionData = JSON.parse(storedSession);
 
+                    // ✅ Restaura avatar do cache imediatamente
+                    if (sessionData.avatarUrl) {
+                        setUserAvatarUrl(sessionData.avatarUrl);
+                    }
+
                     const restoredClient = getClientInstance(
                         sessionData.homeserverUrl,
                         sessionData.accessToken,
@@ -193,7 +169,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     );
 
                     const syncListener = (state: string) => {
-                        console.log("Sync State:", state);
+
                         if (state === 'STOPPED' || state === 'ERROR') {
                             console.error("Sync falhou ou parou. Forçando logout local.");
                             destroySession();
@@ -202,63 +178,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
                     restoredClient.on("sync" as any, syncListener);
 
-                    // ⭐️ E2EE TEMPORARIAMENTE DESABILITADO
-                    // Motivo: initRustCrypto requer IndexedDB, que não existe no React Native
-                    // TODO: Reativar quando suporte RN estiver disponível
-                    /*
-                    if ((restoredClient as any).initRustCrypto) {
-                        console.log("DEBUG: Inicializando E2EE/Criptografia (Rust) na Restauração...");
-                        try {
-                            await (restoredClient as any).initRustCrypto();
-                            console.log("DEBUG: Criptografia restaurada com sucesso!");
-                        } catch (cryptoError) {
-                            console.error("ALERTA E2EE: Falha ao inicializar criptografia (Rust) na restauração:", cryptoError);
-                        }
-                    } else if ((restoredClient as any).initCrypto) {
-                        console.log("DEBUG: Inicializando E2EE/Criptografia (Legacy) na Restauração...");
-                        try {
-                            await (restoredClient as any).initCrypto();
-                        } catch (cryptoError) {
-                            console.error("ALERTA E2EE: Falha ao inicializar criptografia (Legacy) na restauração:", cryptoError);
-                        }
-                    }
-                    */
-                    // ⭐️ E2EE DESABILITADO - Requer WebAssembly
-                    /*
-                    try {
-                        await restoredClient.initRustCrypto({
-                            useIndexedDB: false
-                        });
-                        console.log("✅ E2EE restaurado");
-                        console.error("❌ Falha ao restaurar E2EE:", cryptoError);
-                    }
-                    */
-
-                    // Inicia o cliente restaurado com tracking de presença
                     restoredClient.startClient({
                         syncIntervalMs: 2000,
                         lazyLoadMembers: false,
                     } as any);
 
-                    // Define presença como online
                     try {
                         await restoredClient.setPresence({ presence: 'online' as any });
-                        console.log('✅ Presença definida como online (sessão restaurada)');
                     } catch (e) {
                         console.warn('⚠️ Erro ao definir presença:', e);
                     }
 
-                    // Busca perfil do usuário ao restaurar sessão
+                    // Atualiza perfil em background e salva no cache se mudou
                     try {
                         const profile = await restoredClient.getProfileInfo(sessionData.userId);
-                        setUserAvatarUrl(profile.avatar_url || null);
+                        const newAvatar = profile.avatar_url || null;
+                        const newName = profile.displayname || null;
+
+                        if (newAvatar !== sessionData.avatarUrl || newName !== sessionData.displayName) {
+                            setUserAvatarUrl(newAvatar);
+                            await saveSession({
+                                ...sessionData,
+                                avatarUrl: newAvatar,
+                                displayName: newName
+                            });
+                        }
                     } catch (e) {
-                        console.warn("Erro ao buscar perfil na restauração:", e);
+                        console.warn("Erro ao atualizar perfil na restauração:", e);
                     }
+
+                    // Configura serviço de notificação
+                    notificationService.setClient(restoredClient);
+                    await notificationService.requestPermissions();
 
                     setClient(restoredClient);
 
-                    // Cleanup
                     return () => {
                         restoredClient.stopClient();
                         restoredClient.removeListener("sync" as any, syncListener);
@@ -273,13 +227,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
 
         checkSessionAndStartClient();
-    }, [destroySession]);
+    }, [destroySession, saveSession]);
 
     const updateUserAvatar = useCallback(async (uri: string) => {
         if (!client) return;
 
         try {
-            // 1. Ler o arquivo e fazer upload
             const response = await fetch(uri);
             const blob = await response.blob();
 
@@ -294,30 +247,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 throw new Error("Falha ao obter MXC URL após upload.");
             }
 
-            // 2. Atualizar o perfil no servidor
             await client.setAvatarUrl(mxcUrl);
-
-            // 3. Atualizar estado local
             setUserAvatarUrl(mxcUrl);
-            console.log(`Avatar atualizado com sucesso: ${mxcUrl}`);
+
+            // Atualiza cache
+            const storedSession = await AsyncStorage.getItem(SESSION_KEY);
+            if (storedSession) {
+                const sessionData = JSON.parse(storedSession);
+                await saveSession({
+                    ...sessionData,
+                    avatarUrl: mxcUrl
+                });
+            }
+
+
 
         } catch (error) {
             console.error("Erro ao atualizar avatar:", error);
             throw error;
         }
-    }, [client]);
+    }, [client, saveSession]);
 
     const updateDisplayName = useCallback(async (name: string) => {
         if (!client) return;
 
         try {
             await client.setDisplayName(name);
-            console.log(`Display name atualizado com sucesso: ${name}`);
+
+            // Atualiza cache
+            const storedSession = await AsyncStorage.getItem(SESSION_KEY);
+            if (storedSession) {
+                const sessionData = JSON.parse(storedSession);
+                await saveSession({
+                    ...sessionData,
+                    displayName: name
+                });
+            }
+
+
         } catch (error) {
             console.error("Erro ao atualizar display name:", error);
             throw error;
         }
-    }, [client]);
+    }, [client, saveSession]);
 
     const value: AuthContextType = {
         client,

@@ -135,8 +135,8 @@ export const MuralView: React.FC<MuralViewProps> = ({
         }
     };
 
-    // Filter only images and videos for the grid
-    const mediaMessages = messages.filter(m => m.msgtype === 'm.image' || m.msgtype === 'm.video');
+    // Filter only images and videos for the grid, reversed to show newest first
+    const mediaMessages = messages.filter(m => m.msgtype === 'm.image' || m.msgtype === 'm.video').reverse();
 
     // Format followers count (e.g. 1000 -> 1 Mil)
     const formatFollowers = (count: number) => {
@@ -192,10 +192,10 @@ export const MuralView: React.FC<MuralViewProps> = ({
                     <View style={styles.nameRow}>
                         <Text style={[styles.muralName, { color: theme.text }]}>{room.name}</Text>
                         <View style={styles.followersContainer}>
-                            <Text style={[styles.followersCount, { color: theme.textSecondary }]}>
+                            <Text style={[styles.followersCount, { color: theme.text }]}>
                                 {formatFollowers(memberCount)}
                             </Text>
-                            <Text style={[styles.followersLabel, { color: theme.textSecondary }]}>
+                            <Text style={[styles.followersLabel, { color: theme.textSecondary}]}>
                                 seguidores
                             </Text>
                         </View>
@@ -383,13 +383,13 @@ const styles = StyleSheet.create({
         marginRight: 10,
     },
     followersContainer: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
+        flexDirection: 'column',
+        alignItems: 'center',
         gap: 4,
     },
     followersCount: {
-        fontSize: 14,
-        fontWeight: 'bold',
+        fontSize: 18,
+        // fontWeight: 'bold',
     },
     followersLabel: {
         fontSize: 12,

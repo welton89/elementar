@@ -3,6 +3,7 @@ import { ResizeMode, Video } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { mediaCacheService } from '../services/MediaCacheService';
 
 interface AuthenticatedVideoProps {
     mxcUrl: string;
@@ -36,7 +37,16 @@ export const AuthenticatedVideo: React.FC<AuthenticatedVideoProps> = ({
                 setIsLoading(true);
                 setError(false);
 
-                // Extrai server e mediaId do MXC URL
+                // 1. Verifica se já está no cache
+                const cachedPath = await mediaCacheService.getCachedPath(mxcUrl);
+                if (cachedPath) {
+                    console.log('🎥 Playing video from cache:', cachedPath);
+                    setVideoSource({ uri: cachedPath });
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 2. Se não estiver no cache, prepara stream autenticado
                 // mxc://matrix.org/LDOGrtpsTDzyprJGfWrEdXhi
                 const match = mxcUrl.match(/^mxc:\/\/([^\/]+)\/(.+)$/);
                 if (!match) {
@@ -51,7 +61,7 @@ export const AuthenticatedVideo: React.FC<AuthenticatedVideoProps> = ({
                 const authenticatedUrl = `${baseUrl}/_matrix/client/v1/media/download/${serverName}/${mediaId}`;
                 const accessToken = (client as any).getAccessToken();
 
-                console.log('Preparando vídeo autenticado:', authenticatedUrl);
+                console.log('🎥 Streaming authenticated video:', authenticatedUrl);
 
                 // Configura o source com headers de autenticação
                 setVideoSource({
@@ -60,6 +70,10 @@ export const AuthenticatedVideo: React.FC<AuthenticatedVideoProps> = ({
                         'Authorization': `Bearer ${accessToken}`,
                     },
                 });
+
+                // Opcional: Iniciar download em background para cache futuro?
+                // Por enquanto, deixamos apenas streaming para economizar dados.
+                // mediaCacheService.downloadAndCache(authenticatedUrl, `Bearer ${accessToken}`);
 
             } catch (err) {
                 console.error('Error preparing authenticated video:', err);

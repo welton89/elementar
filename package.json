@@ -30,6 +30,7 @@
     "expo-image-picker": "^17.0.8",
     "expo-linking": "~8.0.9",
     "expo-media-library": "~18.2.0",
+    "expo-notifications": "~0.32.13",
     "expo-router": "~6.0.15",
     "expo-sharing": "~14.0.7",
     "expo-splash-screen": "~31.0.11",
@@ -54,6 +55,7 @@
     "web-streams-polyfill": "^3.3.3"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.28.0",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

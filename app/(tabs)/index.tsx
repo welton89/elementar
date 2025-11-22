@@ -3,8 +3,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { AuthenticatedImage } from '@src/components/AuthenticatedImage';
 import { CategoryManager } from '@src/components/CategoryManager';
-import { RoomItem } from '@src/components/RoomItem'; // Importa o novo componente
+import { RoomItem } from '@src/components/RoomItem';
 import { RoomTagManager } from '@src/components/RoomTagManager';
+import { RoomListSkeleton } from '@src/components/SkeletonLoader';
 import { useAuth } from '@src/contexts/AuthContext';
 import { useCategories } from '@src/contexts/CategoriesContext';
 import { useRoomList } from '@src/contexts/RoomListContext';
@@ -25,7 +26,7 @@ import {
 
 
 export default function RoomListScreen() {
-    const { joinedRooms, invitedRooms, isRoomsLoading, loadRooms } = useRoomList();
+    const { joinedRooms, invitedRooms, isRoomsLoading, isLoadingFromCache, initialLoadComplete, loadRooms } = useRoomList();
     const { logout, client, userAvatarUrl } = useAuth();
     const { theme } = useTheme();
     const { categories, selectedCategory, selectCategory } = useCategories();
@@ -88,9 +89,9 @@ export default function RoomListScreen() {
 
         setProcessingInvite(roomId);
         try {
-            console.log('Aceitando convite para sala:', roomId);
+
             await client.joinRoom(roomId);
-            console.log('Convite aceito com sucesso!');
+
 
             // Força recarregar a lista de salas
             setTimeout(() => {
@@ -112,9 +113,9 @@ export default function RoomListScreen() {
 
         setProcessingInvite(roomId);
         try {
-            console.log('Rejeitando convite para sala:', roomId);
+
             await client.leave(roomId);
-            console.log('Convite rejeitado com sucesso!');
+
 
             // Força recarregar a lista de salas
             setTimeout(() => {
@@ -156,14 +157,9 @@ export default function RoomListScreen() {
         }
     }, [selectedCategory, allCategories]);
 
-    if (isRoomsLoading) {
-        return (
-            <View style={[styles.centered, { backgroundColor: theme.background }]}>
-                <ActivityIndicator size="large" color={theme.primary} />
-                <Text style={{ marginTop: 10, color: theme.text }}>Sincronizando salas...</Text>
-            </View>
-        );
-    }
+    // Show skeleton while loading from cache OR loading from server with no rooms
+    // AND ensure we don't show empty state until initial server load is complete
+    const showSkeleton = isLoadingFromCache || (isRoomsLoading && joinedRooms.length === 0) || (!initialLoadComplete && joinedRooms.length === 0);
 
     // Obtém URL do avatar do usuário do contexto
     // userId já foi obtido acima
@@ -286,11 +282,11 @@ export default function RoomListScreen() {
             {/* Swipeable Category Content */}
             <FlatList
                 ref={flatListRef}
-                data={categorizedRooms}
+                data={allCategories}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                keyExtractor={(item, index) => `category-${index}`}
+                keyExtractor={(item) => item.id || 'all'}
                 onMomentumScrollEnd={handleScroll}
                 scrollEventThrottle={16}
                 getItemLayout={(data, index) => ({
@@ -298,28 +294,38 @@ export default function RoomListScreen() {
                     offset: screenWidth * index,
                     index,
                 })}
-                renderItem={({ item: roomsInCategory }) => (
-                    <View style={{ width: screenWidth }}>
-                        <FlatList
-                            data={roomsInCategory}
-                            keyExtractor={(room) => room.roomId}
-                            renderItem={({ item }) => (
-                                <RoomItem
-                                    room={item}
-                                    onPress={() => navigateToRoom(item.roomId)}
-                                    onLongPress={() => handleLongPressRoom(item.roomId, item.name)}
-                                />
-                            )}
-                            ListEmptyComponent={
-                                <View style={styles.emptyContainer}>
+                renderItem={({ item: category, index }) => {
+                    const rooms = categorizedRooms[index] || [];
+
+                    return (
+                        <View style={{ width: screenWidth }}>
+                            <InviteList />
+
+                            {showSkeleton ? (
+                                <RoomListSkeleton count={8} />
+                            ) : rooms.length === 0 ? (
+                                <View style={[styles.centered, { paddingTop: 50 }]}>
+                                    <Ionicons name="chatbubbles-outline" size={64} color={theme.textTertiary} />
                                     <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                                        {selectedCategory ? 'Nenhuma sala nesta categoria' : 'Nenhuma sala encontrada'}
+                                        {category.id ? `Nenhuma sala em "${category.name}"` : 'Nenhuma sala'}
                                     </Text>
                                 </View>
-                            }
-                        />
-                    </View>
-                )}
+                            ) : (
+                                <FlatList
+                                    data={rooms}
+                                    renderItem={({ item }) => (
+                                        <RoomItem
+                                            room={item}
+                                            onPress={() => navigateToRoom(item.roomId)}
+                                            onLongPress={() => handleLongPressRoom(item.roomId, item.name)}
+                                        />
+                                    )}
+                                    keyExtractor={(item) => item.roomId}
+                                />
+                            )}
+                        </View>
+                    );
+                }}
             />
 
             {/* Modals */}

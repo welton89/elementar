@@ -64,13 +64,27 @@ export const CreateMuralModal: React.FC<CreateMuralModalProps> = ({ visible, onC
                             created_by: client.getUserId(),
                             type: 'mural'
                         }
+                    },
+                    {
+                        type: 'm.room.history_visibility',
+                        state_key: '',
+                        content: {
+                            history_visibility: 'shared' // Members can see history from when they joined
+                        }
                     }
                 ],
                 power_level_content_override: {
-                    events_default: 0, // Allow everyone to send messages (for comments)
-                    users_default: 0,   // Nível padrão de usuários
+                    events_default: 0,  // Allow text messages for everyone (for comments)
+                    users_default: 0,   // Default level for members
                     users: {
-                        [client.getUserId()!]: 100 // Garante que o criador seja admin
+                        [client.getUserId()!]: 100 // Creator is admin
+                    },
+                    events: {
+                        // Restrict media uploads to admins only (power level 50+)
+                        'm.image': 50,   // Only admins can send images
+                        'm.video': 50,   // Only admins can send videos  
+                        'm.audio': 50,   // Only admins can send audio
+                        'm.file': 50,    // Only admins can send files
                     }
                 }
             };

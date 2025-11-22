@@ -2,6 +2,8 @@
 
 import { EventType, MatrixEvent, MsgType, Room } from 'matrix-js-sdk';
 import { useCallback, useEffect, useState } from 'react';
+import { cacheService } from '../services/CacheService';
+import { notificationService } from '../services/NotificationService';
 import { ChatContextType, SimpleMessage } from '../types/chat';
 import { useAuth } from './AuthContext';
 
@@ -16,7 +18,7 @@ const mapMatrixEventToSimpleMessage = (event: MatrixEvent, room: Room): SimpleMe
     // 1. ⭐️ CORREÇÃO DO FILTRO: Inclui m.room.message (não-criptografado) E m.room.encrypted (criptografado)
     if (eventType !== EventType.RoomMessage && eventType !== EventType.RoomEncryption) {
         // Se não for mensagem de chat (Estado, Redação, Reação, etc.), descarte.
-        console.log(`DEBUG: Descartando evento de tipo: ${eventType} `);
+
         return null;
     }
 
@@ -134,7 +136,7 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
 
     // 1. EFEITO DE INICIALIZAÇÃO E CARREGAMENTO (Scrollback)
     useEffect(() => {
-        console.log("DEBUG: useChat - Tentando carregar sala com ID:", roomId);
+
 
         if (!client || !roomId) {
             setError(roomId ? null : "ID da Sala não encontrado na URL.");
@@ -142,7 +144,23 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
             return;
         }
 
+        // Informa o serviço de notificação sobre a sala atual para evitar notificações
+        notificationService.setCurrentRoom(roomId);
+
         const currentRoom = client.getRoom(roomId);
+
+        // Tenta carregar do cache IMEDIATAMENTE
+        const loadFromCache = async () => {
+            const cachedMessages = await cacheService.getMessages(roomId);
+            if (cachedMessages && cachedMessages.length > 0) {
+                console.log(`📦 Loaded ${cachedMessages.length} messages from cache for room ${roomId}`);
+                // Converte CachedMessage para SimpleMessage se necessário (são compatíveis)
+                setMessages(cachedMessages as SimpleMessage[]);
+                setIsLoading(false); // Mostra conteúdo cached enquanto carrega do servidor
+            }
+        };
+        loadFromCache();
+
         console.log("DEBUG: useChat - currentRoom encontrado:", !!currentRoom);
 
         if (!currentRoom) {
@@ -156,15 +174,11 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
 
         // Obtém URL do avatar da sala
         const mxcAvatarUrl = currentRoom.getAvatarUrl(client.baseUrl, 100, 100, 'crop');
-        // O método getAvatarUrl já retorna HTTP URL em algumas versões, mas vamos garantir que pegamos o MXC se possível
-        // Ou usar o mxcUrl direto do evento de estado 'm.room.avatar' se preferir.
-        // O SDK geralmente retorna a URL HTTP pronta. Mas para nosso AuthenticatedImage, precisamos do MXC.
-        // Vamos tentar pegar o evento de estado diretamente.
         const avatarEvent = currentRoom.currentState.getStateEvents('m.room.avatar', '');
         const avatarMxcUrl = avatarEvent?.getContent()?.url;
         setRoomAvatarUrl(avatarMxcUrl || null);
 
-        setIsLoading(true);
+        // setIsLoading(true); // Não seta loading true se já tiver cache, para evitar flash
         setError(null);
 
         const loadInitialTimeline = async () => {
@@ -215,6 +229,9 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
 
                 setMessages(simpleMessages);
 
+                // Salva no cache após carregar do servidor
+                cacheService.saveMessages(roomId, simpleMessages as any[]);
+
             } catch (e) {
                 console.error("Erro ao carregar timeline inicial (scrollback falhou):", e);
                 setError(e instanceof Error ? e.message : "Falha ao carregar mensagens históricas.");
@@ -224,6 +241,10 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
         };
 
         loadInitialTimeline();
+
+        return () => {
+            notificationService.setCurrentRoom(null);
+        };
 
     }, [client, roomId]);
 
@@ -259,6 +280,13 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
             client.removeListener("Room.timeline" as any, timelineUpdateListener);
         };
     }, [client, room, roomId]);
+
+    // 2.1 EFEITO PARA SALVAR CACHE QUANDO MENSAGENS MUDAM
+    useEffect(() => {
+        if (roomId && messages.length > 0) {
+            cacheService.saveMessages(roomId, messages as any[]);
+        }
+    }, [roomId, messages]);
 
 
     // 3. FUNÇÃO DE ENVIO

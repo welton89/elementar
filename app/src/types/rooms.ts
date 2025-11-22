@@ -18,12 +18,11 @@ export interface SimpleRoom {
 
 export const MURAL_STATE_EVENT_TYPE = 'br.com.elementar.mural';
 
-// Tipo para o Contexto da Lista de Salas
 export interface RoomListContextType {
-    // ⭐️ Lista de salas que o usuário está ATIVO
     joinedRooms: SimpleRoom[];
-    // ⭐️ Lista de salas para as quais o usuário foi CONVIDADO
     invitedRooms: SimpleRoom[];
     isRoomsLoading: boolean;
+    isLoadingFromCache: boolean;
+    initialLoadComplete: boolean; // Novo campo
     loadRooms: () => void;
 }

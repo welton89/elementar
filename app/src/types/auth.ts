@@ -7,6 +7,8 @@ export interface SessionData {
     userId: string;
     accessToken: string;
     deviceId: string;
+    avatarUrl?: string | null;
+    displayName?: string | null;
 }
 
 export interface AuthContextType {

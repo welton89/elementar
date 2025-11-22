@@ -215,7 +215,8 @@ export default function PostDetailsScreen() {
                 avatarUrl: member?.getMxcAvatarUrl() || undefined
             };
         });
-        setComments(mappedComments);
+        // Reverse to show newest comments first
+        setComments(mappedComments.reverse());
     };
 
     const handleSendComment = async () => {

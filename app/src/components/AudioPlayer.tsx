@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { mediaCacheService } from '../services/MediaCacheService';
 
 interface AudioPlayerProps {
     audioUrl: string; // MXC URL
@@ -32,15 +33,29 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration }) 
     }, [sound]);
 
     // Fetch authenticated audio URL
+    // Fetch authenticated audio URL
     useEffect(() => {
         const fetchAuthenticatedAudio = async () => {
             if (!client || !audioUrl) return;
 
             try {
+                setIsLoading(true);
+
+                // 1. Tenta pegar do cache primeiro
+                const cachedPath = await mediaCacheService.getCachedPath(audioUrl);
+                if (cachedPath) {
+                    console.log('🎵 Using cached audio:', cachedPath);
+                    setAuthenticatedAudioUrl(cachedPath);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 2. Se não tiver, faz download e cache
                 // Extrai server e mediaId do MXC URL
                 const match = audioUrl.match(/^mxc:\/\/([^\/]+)\/(.+)$/);
                 if (!match) {
                     console.error('Invalid MXC URL:', audioUrl);
+                    setIsLoading(false);
                     return;
                 }
 
@@ -49,33 +64,22 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, duration }) 
 
                 // Usa endpoint Matrix 1.11 authenticated media
                 const authenticatedUrl = `${baseUrl}/_matrix/client/v1/media/download/${serverName}/${mediaId}`;
-
-                console.log('Fetching authenticated audio:', authenticatedUrl);
-
-                // Faz fetch com Authorization header
                 const accessToken = (client as any).getAccessToken();
-                const response = await fetch(authenticatedUrl, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                    },
-                });
 
-                if (response.ok) {
-                    // Converte para blob e depois para data URL
-                    const blob = await response.blob();
-                    const reader = new FileReader();
+                console.log('🎵 Downloading audio:', authenticatedUrl);
 
-                    reader.onloadend = () => {
-                        const dataUrl = reader.result as string;
-                        setAuthenticatedAudioUrl(dataUrl);
-                    };
+                // Usa o serviço de cache para baixar e salvar
+                const localUri = await mediaCacheService.downloadAndCache(
+                    authenticatedUrl,
+                    `Bearer ${accessToken}`
+                );
 
-                    reader.readAsDataURL(blob);
-                } else {
-                    console.error('Failed to fetch audio:', response.status);
-                }
+                setAuthenticatedAudioUrl(localUri);
+
             } catch (error) {
-                console.error('Error fetching authenticated audio:', error);
+                console.error('Error fetching/caching audio:', error);
+            } finally {
+                setIsLoading(false);
             }
         };
 

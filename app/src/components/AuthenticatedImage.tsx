@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ImageProps, StyleSheet, View } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { mediaCacheService } from '../services/MediaCacheService';
 
 interface AuthenticatedImageProps extends Omit<ImageProps, 'source'> {
     mxcUrl: string;
@@ -25,8 +26,17 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ mxcUrl, 
                 setIsLoading(true);
                 setError(false);
 
+                // 1. Tenta pegar do cache primeiro
+                const cachedPath = await mediaCacheService.getCachedPath(mxcUrl);
+                if (cachedPath) {
+                    // console.log('🖼️ Using cached image:', cachedPath);
+                    setImageData(cachedPath);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 2. Se não tiver, faz download e cache
                 // Extrai server e mediaId do MXC URL
-                // mxc://matrix.org/LDOGrtpsTDzyprJGfWrEdXhi
                 const match = mxcUrl.match(/^mxc:\/\/([^\/]+)\/(.+)$/);
                 if (!match) {
                     throw new Error('Invalid MXC URL');
@@ -35,46 +45,26 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ mxcUrl, 
                 const [, serverName, mediaId] = match;
                 const baseUrl = (client as any).baseUrl;
 
-                // CORRETO: Usa o endpoint Matrix 1.11 authenticated media
-                // /_matrix/client/v1/media/download/{serverName}/{mediaId}
+                // Endpoint autenticado Matrix 1.11
                 const authenticatedUrl = `${baseUrl}/_matrix/client/v1/media/download/${serverName}/${mediaId}`;
-
-                console.log('Tentando endpoint autenticado Matrix 1.11:', authenticatedUrl);
 
                 // Faz fetch com Authorization header
                 const accessToken = (client as any).getAccessToken();
-                const response = await fetch(authenticatedUrl, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                    },
-                });
 
-                console.log('Resposta:', response.status);
+                // console.log('🖼️ Downloading image:', authenticatedUrl);
 
-                if (response.ok) {
-                    // Converte para blob e depois para base64
-                    const blob = await response.blob();
-                    const reader = new FileReader();
+                // Usa o serviço de cache para baixar e salvar
+                const localUri = await mediaCacheService.downloadAndCache(
+                    authenticatedUrl,
+                    `Bearer ${accessToken}`
+                );
 
-                    reader.onloadend = () => {
-                        const base64data = reader.result as string;
-                        setImageData(base64data);
-                        setIsLoading(false);
-                    };
-
-                    reader.onerror = () => {
-                        setError(true);
-                        setIsLoading(false);
-                    };
-
-                    reader.readAsDataURL(blob);
-                } else {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                setImageData(localUri);
 
             } catch (err) {
                 console.error('Error fetching authenticated image:', err);
                 setError(true);
+            } finally {
                 setIsLoading(false);
             }
         };
@@ -100,9 +90,9 @@ export const AuthenticatedImage: React.FC<AuthenticatedImageProps> = ({ mxcUrl, 
 
     return (
         <Image
-            {...props}
             source={{ uri: imageData }}
             style={style}
+            {...props}
         />
     );
 };
@@ -114,6 +104,6 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0f0f0',
     },
     errorContainer: {
-        backgroundColor: '#ffebee',
+        backgroundColor: '#e0e0e0',
     },
 });
