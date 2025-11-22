@@ -1,0 +1,23 @@
+--- Iniciando Teste de Login e Criptografia ---
+1. Carregando módulo de criptografia...
+   Módulo carregado com sucesso!
+2. Realizando login...
+FetchHttpApi: --> POST https://matrix.org/_matrix/client/v3/login
+FetchHttpApi: <-- POST https://matrix.org/_matrix/client/v3/login [404ms 200]
+   Login realizado com sucesso! UserID: @weltonmoura:matrix.org
+3. Inicializando criptografia...
+   Métodos disponíveis: []
+   Prototype methods: [ 'initRustCrypto' ]
+   Usando initRustCrypto...
+--- ERRO DURANTE O TESTE ---
+Error: Cannot enable encryption on MatrixClient with unknown deviceId: ensure deviceId is passed in createClient().
+    at file:///home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/matrix-js-sdk/lib/client.js:1079:15
+    at Generator.next (<anonymous>)
+    at asyncGeneratorStep (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@babel/runtime/helpers/asyncToGenerator.js:3:17)
+    at _next (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@babel/runtime/helpers/asyncToGenerator.js:17:9)
+    at /home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@babel/runtime/helpers/asyncToGenerator.js:22:7
+    at new Promise (<anonymous>)
+    at /home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@babel/runtime/helpers/asyncToGenerator.js:14:12
+    at MatrixClient.initRustCrypto (file:///home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/matrix-js-sdk/lib/client.js:1114:7)
+    at testLogin (/home/welton89/Documentos/Projetos/React_Native/elementar/scripts/test_crypto_login.js:56:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)

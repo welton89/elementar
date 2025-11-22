@@ -1,0 +1,30 @@
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+› Skipping dev server
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+Failed to resolve the Android SDK path. Default install location not found: /home/welton89/Android/sdk. Use ANDROID_HOME to set the Android SDK location.
+› Building app...
+
+ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation.
+
+Error: /home/welton89/Documentos/Projetos/React_Native/elementar/android/gradlew app:assembleDebug -x lint -x test --configure-on-demand --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=x86_64,arm64-v8a exited with non-zero code: 1
+Error: /home/welton89/Documentos/Projetos/React_Native/elementar/android/gradlew app:assembleDebug -x lint -x test --configure-on-demand --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=x86_64,arm64-v8a exited with non-zero code: 1
+    at ChildProcess.completionListener (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@expo/spawn-async/src/spawnAsync.ts:67:13)
+    at Object.onceWrapper (node:events:623:26)
+    at ChildProcess.emit (node:events:508:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at Process.ChildProcess._handle.onexit (node:internal/child_process:305:5)
+    ...
+    at spawnAsync (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@expo/spawn-async/src/spawnAsync.ts:28:21)
+    at spawnGradleAsync (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/expo/node_modules/@expo/cli/src/start/platforms/android/gradle.ts:134:28)
+    at assembleAsync (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/expo/node_modules/@expo/cli/src/start/platforms/android/gradle.ts:83:16)
+    at runAndroidAsync (/home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/expo/node_modules/@expo/cli/src/run/android/runAndroidAsync.ts:62:24)

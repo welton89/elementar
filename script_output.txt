@@ -1,0 +1,12 @@
+--- Iniciando Teste de Login e Criptografia ---
+1. Carregando módulo de criptografia...
+   Módulo carregado com sucesso!
+2. Realizando login...
+FetchHttpApi: --> POST https://matrix.org/_matrix/client/v3/login
+FetchHttpApi: <-- POST https://matrix.org/_matrix/client/v3/login [385ms 200]
+   Login realizado com sucesso! UserID: @weltonmoura:matrix.org
+3. Inicializando criptografia (initCrypto)...
+--- ERRO DURANTE O TESTE ---
+TypeError: authClient.initCrypto is not a function
+    at testLogin (/home/welton89/Documentos/Projetos/React_Native/elementar/scripts/test_crypto_login.js:50:26)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)

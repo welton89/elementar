@@ -1,0 +1,161 @@
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAuthNative } from './src/contexts/AuthContextNative';
+
+export default function NativeLoginTestScreen() {
+    const { login, logout, isLoggedIn, isLoading, error, client } = useAuthNative();
+    const [homeserver, setHomeserver] = useState('https://matrix.org');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+
+    const handleLogin = async () => {
+        if (!username || !password) {
+            Alert.alert('Error', 'Please enter username and password');
+            return;
+        }
+        try {
+            await login(homeserver, username, password);
+            Alert.alert('Success', 'Logged in with native SDK!');
+        } catch (err: any) {
+            Alert.alert('Login Error', err.message);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await logout();
+            Alert.alert('Success', 'Logged out');
+        } catch (err: any) {
+            Alert.alert('Logout Error', err.message);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <View style={styles.container}>
+                <ActivityIndicator size="large" color="#0000ff" />
+                <Text style={styles.loadingText}>Loading native session...</Text>
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.container}>
+            <Text style={styles.title}>⚡️ Native SDK Login Test</Text>
+
+            {error && <Text style={styles.error}>{error}</Text>}
+
+            {isLoggedIn ? (
+                <View style={styles.loggedInContainer}>
+                    <Text style={styles.successText}>✅ Logged In!</Text>
+                    <Text style={styles.infoText}>Client is ready.</Text>
+                    <Button title="Logout" onPress={handleLogout} color="red" />
+                </View>
+            ) : (
+                <View style={styles.formContainer}>
+                    <Text style={styles.label}>Homeserver</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={homeserver}
+                        onChangeText={setHomeserver}
+                        autoCapitalize="none"
+                        placeholder="https://matrix.org"
+                    />
+
+                    <Text style={styles.label}>Username</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
+                        placeholder="@user:matrix.org"
+                    />
+
+                    <Text style={styles.label}>Password</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        placeholder="Password"
+                    />
+
+                    <Button title="Login (Native)" onPress={handleLogin} />
+                </View>
+            )}
+
+            <Text style={styles.footer}>
+                Testing @unomed/react-native-matrix-sdk
+            </Text>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        padding: 20,
+        justifyContent: 'center',
+        backgroundColor: '#f5f5f5',
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 30,
+        textAlign: 'center',
+        color: '#333',
+    },
+    formContainer: {
+        backgroundColor: 'white',
+        padding: 20,
+        borderRadius: 10,
+        elevation: 3,
+    },
+    loggedInContainer: {
+        alignItems: 'center',
+        backgroundColor: '#e8f5e9',
+        padding: 30,
+        borderRadius: 10,
+    },
+    label: {
+        fontWeight: 'bold',
+        marginBottom: 5,
+        color: '#555',
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ddd',
+        padding: 10,
+        borderRadius: 5,
+        marginBottom: 15,
+        backgroundColor: '#fafafa',
+    },
+    error: {
+        color: 'red',
+        marginBottom: 15,
+        textAlign: 'center',
+        backgroundColor: '#ffebee',
+        padding: 10,
+        borderRadius: 5,
+    },
+    successText: {
+        fontSize: 20,
+        color: 'green',
+        fontWeight: 'bold',
+        marginBottom: 10,
+    },
+    infoText: {
+        marginBottom: 20,
+        color: '#666',
+    },
+    loadingText: {
+        marginTop: 10,
+        color: '#666',
+    },
+    footer: {
+        marginTop: 30,
+        textAlign: 'center',
+        color: '#999',
+        fontSize: 12,
+    },
+});

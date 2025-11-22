@@ -1,0 +1,50 @@
+--- Iniciando Teste de Login e Criptografia ---
+1. Carregando módulo de criptografia...
+   Módulo carregado com sucesso!
+2. Realizando login...
+FetchHttpApi: --> POST https://matrix.org/_matrix/client/v3/login
+FetchHttpApi: <-- POST https://matrix.org/_matrix/client/v3/login [397ms 200]
+   Login realizado com sucesso! UserID: @weltonmoura:matrix.org
+3. Inicializando criptografia...
+   Métodos disponíveis: []
+   Prototype methods: [ 'initRustCrypto' ]
+   Usando initRustCrypto...
+Downloading Rust crypto library
+Initialising Rust crypto-sdk WASM artifact
+Opening Rust CryptoStore
+DEBUG matrix_sdk_indexeddb::crypto_store: IndexedDbCryptoStore: opening main store matrix-js-sdk::matrix-sdk-crypto
+    at /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/matrix-sdk-indexeddb-0.14.0/src/crypto_store/mod.rs:291
+panicked at /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/indexed_db_futures-0.5.0/src/idb_database.rs:232:14:
+The `indexedDB` getter returned `null` or `undefined`
+
+Stack:
+
+Error
+    at __wbg_new_8a6f238a6ece86ea (file:///home/welton89/Documentos/Projetos/React_Native/elementar/node_modules/@matrix-org/matrix-sdk-crypto-wasm/pkg/matrix_sdk_crypto_wasm_bg.js:11202:17)
+    at matrix_sdk_crypto_wasm.wasm.std::panicking::rust_panic_with_hook::h4fa3daead9c4e0a7 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[3068]:0x2fc0b4)
+    at matrix_sdk_crypto_wasm.wasm.core::panicking::panic_fmt::hd3052a3662d50c95 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[7244]:0x37a1d6)
+    at matrix_sdk_crypto_wasm.wasm.core::option::expect_failed::h1a7ece2e267b6691 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[4751]:0x3317c0)
+    at matrix_sdk_crypto_wasm.wasm.indexed_db_futures::idb_database::factory::ha933a2d24f3988e8 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1449]:0x275548)
+    at matrix_sdk_crypto_wasm.wasm.indexed_db_futures::idb_database::IdbDatabase::open::h0639d429a06fe54c (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[4562]:0x32dd0a)
+    at matrix_sdk_crypto_wasm.wasm.matrix_sdk_indexeddb::crypto_store::IndexeddbCryptoStore::open_with_store_cipher::{{closure}}::h2140379332f7ffff (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1027]:0x22ab96)
+    at matrix_sdk_crypto_wasm.wasm.matrix_sdk_crypto_wasm::store::StoreHandle::open::{{closure}}::ha871a07fe3fb9b9b (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[335]:0xe8ff0)
+    at matrix_sdk_crypto_wasm.wasm.matrix_sdk_crypto_wasm::future::future_to_promise_with_custom_error::{{closure}}::{{closure}}::hf4e19427f74fe24b (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1149]:0x24a60a)
+    at matrix_sdk_crypto_wasm.wasm.wasm_bindgen_futures::queue::Queue::new::{{closure}}::h19b8376040f46b46 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1795]:0x2983fd)
+
+
+wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:1
+
+
+RuntimeError: unreachable
+    at matrix_sdk_crypto_wasm.wasm.std::panicking::rust_panic_with_hook::h4fa3daead9c4e0a7 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[3068]:0x2fc18b)
+    at matrix_sdk_crypto_wasm.wasm.core::panicking::panic_fmt::hd3052a3662d50c95 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[7244]:0x37a1d6)
+    at matrix_sdk_crypto_wasm.wasm.core::option::expect_failed::h1a7ece2e267b6691 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[4751]:0x3317c0)
+    at matrix_sdk_crypto_wasm.wasm.indexed_db_futures::idb_database::factory::ha933a2d24f3988e8 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1449]:0x275548)
+    at matrix_sdk_crypto_wasm.wasm.indexed_db_futures::idb_database::IdbDatabase::open::h0639d429a06fe54c (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[4562]:0x32dd0a)
+    at matrix_sdk_crypto_wasm.wasm.matrix_sdk_indexeddb::crypto_store::IndexeddbCryptoStore::open_with_store_cipher::{{closure}}::h2140379332f7ffff (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1027]:0x22ab96)
+    at matrix_sdk_crypto_wasm.wasm.matrix_sdk_crypto_wasm::store::StoreHandle::open::{{closure}}::ha871a07fe3fb9b9b (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[335]:0xe8ff0)
+    at matrix_sdk_crypto_wasm.wasm.matrix_sdk_crypto_wasm::future::future_to_promise_with_custom_error::{{closure}}::{{closure}}::hf4e19427f74fe24b (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1149]:0x24a60a)
+    at matrix_sdk_crypto_wasm.wasm.wasm_bindgen_futures::queue::Queue::new::{{closure}}::h19b8376040f46b46 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[1795]:0x2983fd)
+    at matrix_sdk_crypto_wasm.wasm.wasm_bindgen::convert::closures::_::invoke::h126fe85fd83e8ae4 (wasm://wasm/matrix_sdk_crypto_wasm.wasm-01508a5e:wasm-function[8568]:0x390f6a)
+
+Node.js v24.8.0

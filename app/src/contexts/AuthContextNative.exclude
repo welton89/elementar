@@ -1,0 +1,127 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ClientBuilder } from '@unomed/react-native-matrix-sdk';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+
+interface AuthContextNativeType {
+    client: any | null;
+    isLoading: boolean;
+    isLoggedIn: boolean;
+    login: (homeserverUrl: string, username: string, password: string) => Promise<void>;
+    logout: () => Promise<void>;
+    error: string | null;
+}
+
+const AuthContextNative = createContext<AuthContextNativeType | undefined>(undefined);
+
+const SESSION_KEY = '@MatrixRust:session';
+
+export const AuthProviderNative: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    console.log('🚀 [DEBUG] AuthProviderNative rendering');
+    const [client, setClient] = useState<any | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        console.log('🚀 [DEBUG] AuthProviderNative mounted');
+    }, []);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const restoreSession = async () => {
+            try {
+                const sessionData = await AsyncStorage.getItem(SESSION_KEY);
+                if (sessionData) {
+                    const { homeserverUrl, accessToken, userId, deviceId } = JSON.parse(sessionData);
+
+                    // Attempt to restore session
+                    // Note: API might differ, adjusting based on findings
+                    const builder = new ClientBuilder()
+                        .homeserverUrl(homeserverUrl);
+
+                    // If builder supports restoring session directly:
+                    // .accessToken(accessToken)
+                    // .userId(userId)
+                    // .deviceId(deviceId)
+
+                    const restoredClient = await builder.build();
+
+                    // If client has restore method:
+                    // await restoredClient.restoreSession(sessionData);
+
+                    setClient(restoredClient);
+                    setIsLoggedIn(true);
+                    console.log('✅ Native Session restored');
+                }
+            } catch (err) {
+                console.error('Failed to restore native session:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        restoreSession();
+    }, []);
+
+    const login = async (homeserverUrl: string, username: string, password: string) => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            console.log('Attempting native login...');
+
+            // Try Method 1: Client.login (Static)
+            // const newClient = await Client.login({ homeserverUrl, username, password });
+
+            // Try Method 2: Builder -> Client -> Login
+            const builder = new ClientBuilder().homeserverUrl(homeserverUrl);
+            const newClient = await builder.build();
+
+            // Check if login method exists on instance
+            if ((newClient as any).login) {
+                await (newClient as any).login(username, password);
+            } else {
+                throw new Error('Login method not found on Client instance');
+            }
+
+            // Save session
+            // const session = await newClient.session();
+            // await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+
+            setClient(newClient);
+            setIsLoggedIn(true);
+            console.log('✅ Native Login successful');
+        } catch (err: any) {
+            console.error('Native login failed:', err);
+            setError(err.message || 'Login failed');
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const logout = async () => {
+        try {
+            if (client) {
+                await client.logout();
+            }
+            await AsyncStorage.removeItem(SESSION_KEY);
+            setClient(null);
+            setIsLoggedIn(false);
+        } catch (err) {
+            console.error('Native logout failed:', err);
+        }
+    };
+
+    return (
+        <AuthContextNative.Provider value={{ client, isLoading, isLoggedIn, login, logout, error }}>
+            {children}
+        </AuthContextNative.Provider>
+    );
+};
+
+export const useAuthNative = () => {
+    const context = useContext(AuthContextNative);
+    if (!context) {
+        throw new Error('useAuthNative must be used within AuthProviderNative');
+    }
+    return context;
+};

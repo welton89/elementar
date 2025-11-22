@@ -1,98 +1,408 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+// app/(tabs)/index.tsx (COMPLETO E CORRIGIDO)
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { AuthenticatedImage } from '@src/components/AuthenticatedImage';
+import { CategoryManager } from '@src/components/CategoryManager';
+import { RoomItem } from '@src/components/RoomItem'; // Importa o novo componente
+import { RoomTagManager } from '@src/components/RoomTagManager';
+import { useAuth } from '@src/contexts/AuthContext';
+import { useCategories } from '@src/contexts/CategoriesContext';
+import { useRoomList } from '@src/contexts/RoomListContext';
+import { useTheme } from '@src/contexts/ThemeContext';
+import { Stack, useRouter } from 'expo-router'; // Importado para navegação
+import React, { useState } from 'react';
+import {
+    ActivityIndicator,
+    Button,
+    Dimensions,
+    FlatList,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
+
+export default function RoomListScreen() {
+    const { joinedRooms, invitedRooms, isRoomsLoading, loadRooms } = useRoomList();
+    const { logout, client, userAvatarUrl } = useAuth();
+    const { theme } = useTheme();
+    const { categories, selectedCategory, selectCategory } = useCategories();
+    const router = useRouter();
+
+    const [showCategoryManager, setShowCategoryManager] = useState(false);
+    const [showRoomTagManager, setShowRoomTagManager] = useState(false);
+    const [selectedRoom, setSelectedRoom] = useState<{ id: string; name: string } | null>(null);
+    const [processingInvite, setProcessingInvite] = useState<string | null>(null);
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    const flatListRef = React.useRef<FlatList>(null);
+    const tabScrollRef = React.useRef<ScrollView>(null);
+    const screenWidth = Dimensions.get('window').width;
+
+    const userId = client?.getUserId();
+
+    // All categories including "All"
+    const allCategories = React.useMemo(() => [
+        { id: null, name: 'Todos', color: theme.primary },
+        ...categories
+    ], [categories, theme.primary]);
+
+    // Get filtered rooms for each category
+    const categorizedRooms = React.useMemo(() => {
+        return allCategories.map(category => {
+            const nonMuralRooms = joinedRooms.filter(room => !room.isMural);
+
+            if (!category.id) return nonMuralRooms; // "Todos"
+
+            return nonMuralRooms.filter(room => {
+                const matrixRoom = client?.getRoom(room.roomId);
+                if (!matrixRoom || !matrixRoom.tags) return false;
+
+                const tagName = `u.dir.${category.id}`;
+                return tagName in matrixRoom.tags;
+            });
+        });
+    }, [allCategories, joinedRooms, client]);
+
+    // ⭐️ 1. FUNÇÃO DE NAVEGAÇÃO DEFINIDA AQUI
+    const navigateToRoom = (roomId: string) => {
+        router.push(`/room/${roomId}`);
+    };
+
+    const navigateToSettings = () => {
+        router.push('/settings');
+    };
+
+    const handleLongPressRoom = (roomId: string, roomName: string) => {
+        setSelectedRoom({ id: roomId, name: roomName });
+        setShowRoomTagManager(true);
+    };
+
+    const handleAcceptInvite = async (roomId: string) => {
+        if (!client) {
+            alert('Cliente Matrix não disponível.');
+            return;
+        }
+
+        setProcessingInvite(roomId);
+        try {
+            console.log('Aceitando convite para sala:', roomId);
+            await client.joinRoom(roomId);
+            console.log('Convite aceito com sucesso!');
+
+            // Força recarregar a lista de salas
+            setTimeout(() => {
+                loadRooms();
+                setProcessingInvite(null);
+            }, 500);
+        } catch (error: any) {
+            console.error('Erro ao aceitar convite:', error);
+            alert(`Falha ao aceitar convite: ${error.message || 'Erro desconhecido'}`);
+            setProcessingInvite(null);
+        }
+    };
+
+    const handleRejectInvite = async (roomId: string) => {
+        if (!client) {
+            alert('Cliente Matrix não disponível.');
+            return;
+        }
+
+        setProcessingInvite(roomId);
+        try {
+            console.log('Rejeitando convite para sala:', roomId);
+            await client.leave(roomId);
+            console.log('Convite rejeitado com sucesso!');
+
+            // Força recarregar a lista de salas
+            setTimeout(() => {
+                loadRooms();
+                setProcessingInvite(null);
+            }, 500);
+        } catch (error: any) {
+            console.error('Erro ao rejeitar convite:', error);
+            alert(`Falha ao rejeitar convite: ${error.message || 'Erro desconhecido'}`);
+            setProcessingInvite(null);
+        }
+    };
+
+    // Handle category change from swipe
+    const handleScroll = (event: any) => {
+        const offsetX = event.nativeEvent.contentOffset.x;
+        const index = Math.round(offsetX / screenWidth);
+
+        if (index !== activeIndex && index >= 0 && index < allCategories.length) {
+            setActiveIndex(index);
+            const newCategory = allCategories[index];
+            selectCategory(newCategory.id);
+        }
+    };
+
+    // Handle tab press
+    const handleTabPress = (index: number) => {
+        setActiveIndex(index);
+        flatListRef.current?.scrollToIndex({ index, animated: true });
+        const newCategory = allCategories[index];
+        selectCategory(newCategory.id);
+    };
+
+    // Sync activeIndex with selectedCategory
+    React.useEffect(() => {
+        const index = allCategories.findIndex(cat => cat.id === selectedCategory);
+        if (index !== -1 && index !== activeIndex) {
+            setActiveIndex(index);
+        }
+    }, [selectedCategory, allCategories]);
+
+    if (isRoomsLoading) {
+        return (
+            <View style={[styles.centered, { backgroundColor: theme.background }]}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={{ marginTop: 10, color: theme.text }}>Sincronizando salas...</Text>
+            </View>
+        );
+    }
+
+    // Obtém URL do avatar do usuário do contexto
+    // userId já foi obtido acima
+
+    const InviteList = () => {
+        if (invitedRooms.length === 0) return null;
+
+        return (
+            <View style={[styles.inviteContainer, { backgroundColor: theme.surfaceVariant, borderBottomColor: theme.divider }]}>
+                <Text style={[styles.inviteHeader, { color: theme.primary }]}>Convites Pendentes ({invitedRooms.length})</Text>
+                {invitedRooms.map(room => (
+                    <View key={room.roomId} style={[styles.inviteItem, { borderBottomColor: theme.divider }]}>
+                        <Text style={[styles.inviteName, { color: theme.text }]}>{room.name}</Text>
+                        <View style={styles.inviteActions}>
+                            {processingInvite === room.roomId ? (
+                                <ActivityIndicator size="small" color={theme.primary} />
+                            ) : (
+                                <>
+                                    <Button
+                                        title="Aceitar"
+                                        onPress={() => handleAcceptInvite(room.roomId)}
+                                        color={theme.primary}
+                                        disabled={processingInvite !== null}
+                                    />
+                                    <View style={{ width: 10 }} />
+                                    <Button
+                                        title="Rejeitar"
+                                        color={theme.textSecondary}
+                                        onPress={() => handleRejectInvite(room.roomId)}
+                                        disabled={processingInvite !== null}
+                                    />
+                                </>
+                            )}
+                        </View>
+                    </View>
+                ))}
+            </View>
+        );
+    };
+
+    return (
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <Stack.Screen
+                options={{
+                    title: "Conversas",
+                    headerStyle: {
+                        backgroundColor: theme.surface,
+                    },
+                    headerTintColor: theme.text,
+                    headerShadowVisible: false,
+                    headerRight: () => (
+                        <TouchableOpacity onPress={navigateToSettings} style={{ marginRight: 10 }}>
+                            {userAvatarUrl ? (
+                                <AuthenticatedImage
+                                    mxcUrl={userAvatarUrl}
+                                    style={{ width: 42, height: 42, borderRadius: 22, marginRight: 8 }}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={{
+                                    width: 42,
+                                    height: 42,
+                                    borderRadius: 16,
+                                    backgroundColor: theme.primary,
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                }}>
+                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>
+                                        {userId?.charAt(1).toUpperCase() || 'U'}
+                                    </Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    )
+                }}
             />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+            {/* Category Filter Tabs */}
+            <View style={[styles.categoryFilterContainer, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+                <ScrollView
+                    ref={tabScrollRef}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.categoryScroll}
+                >
+                    {allCategories.map((category, index) => (
+                        <TouchableOpacity
+                            key={category.id || 'all'}
+                            style={[
+                                styles.categoryButton,
+                                { backgroundColor: theme.background, borderColor: theme.border },
+                                activeIndex === index && {
+                                    backgroundColor: category.color || theme.primary,
+                                    borderColor: category.color || theme.primary
+                                }
+                            ]}
+                            onPress={() => handleTabPress(index)}
+                        >
+                            <Text style={[
+                                styles.categoryButtonText,
+                                { color: activeIndex === index ? '#fff' : theme.text }
+                            ]}>
+                                {category.name}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+
+                    {/* Botão para gerenciar categorias */}
+                    <TouchableOpacity
+                        style={[styles.addCategoryButton, { borderColor: theme.border }]}
+                        onPress={() => setShowCategoryManager(true)}
+                    >
+                        <Ionicons name="add-circle" size={32} color={theme.primary} />
+                    </TouchableOpacity>
+                </ScrollView>
+            </View>
+
+            <InviteList />
+
+            {/* Swipeable Category Content */}
+            <FlatList
+                ref={flatListRef}
+                data={categorizedRooms}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item, index) => `category-${index}`}
+                onMomentumScrollEnd={handleScroll}
+                scrollEventThrottle={16}
+                getItemLayout={(data, index) => ({
+                    length: screenWidth,
+                    offset: screenWidth * index,
+                    index,
+                })}
+                renderItem={({ item: roomsInCategory }) => (
+                    <View style={{ width: screenWidth }}>
+                        <FlatList
+                            data={roomsInCategory}
+                            keyExtractor={(room) => room.roomId}
+                            renderItem={({ item }) => (
+                                <RoomItem
+                                    room={item}
+                                    onPress={() => navigateToRoom(item.roomId)}
+                                    onLongPress={() => handleLongPressRoom(item.roomId, item.name)}
+                                />
+                            )}
+                            ListEmptyComponent={
+                                <View style={styles.emptyContainer}>
+                                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                                        {selectedCategory ? 'Nenhuma sala nesta categoria' : 'Nenhuma sala encontrada'}
+                                    </Text>
+                                </View>
+                            }
+                        />
+                    </View>
+                )}
+            />
+
+            {/* Modals */}
+            <CategoryManager visible={showCategoryManager} onClose={() => setShowCategoryManager(false)} />
+            <RoomTagManager
+                visible={showRoomTagManager}
+                roomId={selectedRoom?.id || null}
+                roomName={selectedRoom?.name || ''}
+                onClose={() => {
+                    setShowRoomTagManager(false);
+                    setSelectedRoom(null);
+                }}
+            />
+        </View>
+    );
 }
 
+// ... (Styles permanecem no final)
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+    container: { flex: 1 },
+    centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    emptyText: {
+        textAlign: 'center',
+        marginTop: 20,
+    },
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+    },
+    categoryFilterContainer: {
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderBottomWidth: 1,
+    },
+    categoryScroll: {
+        paddingHorizontal: 8,
+        gap: 8,
+    },
+    categoryButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        marginRight: 0,
+    },
+    categoryButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    addCategoryButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'transparent',
+    },
+    inviteContainer: {
+        padding: 10,
+        borderBottomWidth: 1,
+    },
+    inviteHeader: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginBottom: 5,
+    },
+    inviteItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 5,
+        borderBottomWidth: 1,
+    },
+    inviteName: {
+        fontSize: 15,
+        fontWeight: '500',
+        flex: 1,
+    },
+    inviteActions: {
+        flexDirection: 'row',
+        marginLeft: 10,
+    },
 });

@@ -1,50 +1,101 @@
-# Welcome to your Expo app 👋
+# Elementar
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Um cliente Matrix moderno e completo para React Native, com suporte a mensagens, murais, categorias e muito mais.
 
-## Get started
+## 🚀 Recursos
 
-1. Install dependencies
+### 💬 Mensagens
+- Chat em tempo real com suporte a texto, imagens, vídeos e áudio
+- Player de áudio moderno com visualização de forma de onda
+- Edição e exclusão de mensagens
+- Indicadores de digitação
+- Status de entrega de mensagens
+- Navegação por swipe entre categorias
 
-   ```bash
-   npm install
-   ```
+### 🖼️ Murais
+- Criação de murais (espaços) para compartilhamento de mídia
+- Suporte a imagens e vídeos
+- Sistema de comentários em posts
+- Visualização em grade de posts
 
-2. Start the app
+### 🏷️ Organização
+- Categorias personalizadas para organizar conversas
+- Tags de sala customizáveis
+- Navegação por swipe entre categorias
+- Filtros inteligentes
 
-   ```bash
-   npx expo start
-   ```
+### 🎨 Interface
+- Tema claro e escuro
+- Design moderno e responsivo
+- Animações suaves
+- Componentes otimizados para performance
 
-In the output, you'll find options to open the app in a
+## 🛠️ Tecnologias
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- **React Native** - Framework mobile
+- **Expo** - Plataforma de desenvolvimento
+- **Matrix JS SDK** - Protocolo de comunicação descentralizado
+- **TypeScript** - Tipagem estática
+- **Expo Router** - Navegação baseada em arquivos
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 📦 Instalação
 
 ```bash
-npm run reset-project
+# Clone o repositório
+git clone https://github.com/welton89/elementar.git
+
+# Entre no diretório
+cd elementar
+
+# Instale as dependências
+npm install
+
+# Inicie o projeto
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 🔧 Configuração
 
-## Learn more
+1. Configure seu servidor Matrix em `app/src/contexts/AuthContext.tsx`
+2. Ajuste as configurações de tema em `app/src/contexts/ThemeContext.tsx`
 
-To learn more about developing your project with Expo, look at the following resources:
+## 📱 Executando
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+# Android
+npx expo run:android
 
-## Join the community
+# iOS
+npx expo run:ios
 
-Join our community of developers creating universal apps.
+# Web
+npx expo start --web
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 🏗️ Estrutura do Projeto
+
+```
+elementar/
+├── app/                    # Código da aplicação
+│   ├── (auth)/            # Telas de autenticação
+│   ├── (tabs)/            # Telas principais (tabs)
+│   ├── room/              # Telas de salas e posts
+│   └── src/
+│       ├── components/    # Componentes reutilizáveis
+│       ├── contexts/      # Contextos React
+│       └── types/         # Definições TypeScript
+├── assets/                # Recursos estáticos
+└── package.json
+```
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues e pull requests.
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT.
+
+## 👨‍💻 Autor
+
+Desenvolvido por Welton89

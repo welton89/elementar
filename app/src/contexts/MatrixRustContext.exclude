@@ -1,0 +1,64 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ClientBuilder } from '@unomed/react-native-matrix-sdk';
+import React, { createContext, useContext, useState } from 'react';
+
+interface MatrixRustContextType {
+    homeserverUrl: string;
+    setHomeserverUrl: (url: string) => void;
+    testConnection: () => Promise<string>;
+    error: string | null;
+}
+
+const MatrixRustContext = createContext<MatrixRustContextType | undefined>(undefined);
+
+const SESSION_KEY = '@MatrixRust:homeserver';
+
+export const MatrixRustProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [homeserverUrl, setHomeserverUrlState] = useState('https://matrix.org');
+    const [error, setError] = useState<string | null>(null);
+
+    const setHomeserverUrl = async (url: string) => {
+        setHomeserverUrlState(url);
+        await AsyncStorage.setItem(SESSION_KEY, url);
+    };
+
+    const testConnection = async (): Promise<string> => {
+        setError(null);
+
+        try {
+            if (!homeserverUrl.length) {
+                throw new Error('Homeserver URL is empty');
+            }
+
+            const client = await new ClientBuilder().homeserverUrl(homeserverUrl).build();
+            const loginDetails = await client.homeserverLoginDetails();
+
+            const result = `✅ Connection Successful!\n\n`
+                + `URL: ${loginDetails.url()}\n`
+                + `OIDC Login: ${loginDetails.supportsOidcLogin()}\n`
+                + `Password Login: ${loginDetails.supportsPasswordLogin()}`;
+
+            console.log('✅ Native E2EE module working!', result);
+            return result;
+        } catch (err: any) {
+            const errorMsg = err.message || String(err);
+            console.error('❌ Connection failed:', errorMsg);
+            setError(errorMsg);
+            throw err;
+        }
+    };
+
+    return (
+        <MatrixRustContext.Provider value={{ homeserverUrl, setHomeserverUrl, testConnection, error }}>
+            {children}
+        </MatrixRustContext.Provider>
+    );
+};
+
+export const useMatrixRust = () => {
+    const context = useContext(MatrixRustContext);
+    if (!context) {
+        throw new Error('useMatrixRust must be used within MatrixRustProvider');
+    }
+    return context;
+};
