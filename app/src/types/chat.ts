@@ -22,6 +22,13 @@ export interface SimpleMessage {
     isMe?: boolean; // Se a mensagem é do usuário atualtar URL, etc.
 }
 
+export interface RoomMember {
+    userId: string;
+    displayName: string;
+    avatarUrl: string | null;
+    powerLevel: number;
+}
+
 // Tipo para a Store de Chat
 export interface ChatContextType {
     messages: SimpleMessage[];
