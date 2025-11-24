@@ -1,13 +1,14 @@
 import { CommentInput } from '@src/components/CommentInput';
 import { CommentItem } from '@src/components/CommentItem';
 import { PostHeader } from '@src/components/PostHeader';
+import { CommentSkeleton, PostSkeleton } from '@src/components/SkeletonLoaders';
 import { useAuth } from '@src/contexts/AuthContext';
 import { useTheme } from '@src/contexts/ThemeContext';
 import { usePostDetailsLogic } from '@src/hooks/usePostDetailsLogic';
 import { SimpleMessage } from '@src/types/chat';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 
 export default function PostDetailsScreen() {
     const { roomId, eventId } = useLocalSearchParams<{ roomId: string; eventId: string }>();
@@ -29,7 +30,9 @@ export default function PostDetailsScreen() {
 
     // Hooks called unconditionally
     const renderHeader = React.useCallback(() => {
-        if (!postEvent) return null;
+        if (isLoading || !postEvent) {
+            return <PostSkeleton />;
+        }
         const content = postEvent.getContent();
         return (
             <PostHeader
@@ -39,19 +42,20 @@ export default function PostDetailsScreen() {
                 theme={theme}
             />
         );
-    }, [postEvent, theme]);
+    }, [postEvent, theme, isLoading]);
 
     const renderComment = React.useCallback(({ item }: { item: SimpleMessage }) => (
         <CommentItem item={item} theme={theme} />
     ), [theme]);
 
-    if (isLoading || !postEvent) {
-        return (
-            <View style={[styles.container, { backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={theme.primary} />
-            </View>
-        );
-    }
+    // Renderiza skeletons durante carregamento
+    const renderSkeletonComments = () => (
+        <>
+            <CommentSkeleton />
+            <CommentSkeleton />
+            <CommentSkeleton />
+        </>
+    );
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -68,10 +72,11 @@ export default function PostDetailsScreen() {
 
             <FlatList
                 ref={flatListRef}
-                data={comments}
+                data={isLoading ? [] : comments}
                 renderItem={renderComment}
                 keyExtractor={item => item.eventId}
                 ListHeaderComponent={renderHeader}
+                ListFooterComponent={isLoading ? renderSkeletonComments() : null}
                 contentContainerStyle={{ paddingBottom: keyboardHeight + 80 }}
             />
 
