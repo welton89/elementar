@@ -16,6 +16,7 @@ import {
     Image,
     Modal,
     Platform,
+    RefreshControl,
     StyleSheet,
     Text,
     TextInput,
@@ -37,6 +38,9 @@ interface MuralViewProps {
     messages: SimpleMessage[];
     onSendImage: (uri: string, filename: string) => Promise<void>;
     onSendVideo: (uri: string, filename: string) => Promise<void>;
+    loadOlderMessages?: () => Promise<boolean>;
+    isLoadingOlder?: boolean;
+    onRefresh?: () => Promise<void>;
 }
 
 export const MuralView: React.FC<MuralViewProps> = ({
@@ -45,7 +49,10 @@ export const MuralView: React.FC<MuralViewProps> = ({
     client,
     messages,
     onSendImage,
-    onSendVideo
+    onSendVideo,
+    loadOlderMessages,
+    isLoadingOlder = false,
+    onRefresh,
 }) => {
     const { theme } = useTheme();
     const [creatorId, setCreatorId] = useState<string | null>(null);
@@ -59,6 +66,7 @@ export const MuralView: React.FC<MuralViewProps> = ({
     const [caption, setCaption] = useState('');
     const { width } = useWindowDimensions();
     const [isPosting, setIsPosting] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     const screenWidth = Dimensions.get('window').width;
     const columnWidth = screenWidth / 3;
@@ -407,7 +415,6 @@ export const MuralView: React.FC<MuralViewProps> = ({
                 keyExtractor={item => item.eventId}
                 numColumns={3}
                 scrollEnabled={!isModalOpen}
-                //style={{ opacity: isModalOpen ? 1 : 1 }}
                 renderItem={({ item }) => (
                     <PostMural
                         message={item}
@@ -425,6 +432,33 @@ export const MuralView: React.FC<MuralViewProps> = ({
                 )}
                 ListHeaderComponent={renderHeader}
                 contentContainerStyle={{ paddingBottom: 80 }}
+                refreshControl={
+                    onRefresh ? (
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={async () => {
+                                setRefreshing(true);
+                                await onRefresh();
+                                setRefreshing(false);
+                            }}
+                            tintColor={theme.primary}
+                            colors={[theme.primary]}
+                        />
+                    ) : undefined
+                }
+                onEndReached={async () => {
+                    if (loadOlderMessages && !isLoadingOlder && !refreshing) {
+                        await loadOlderMessages();
+                    }
+                }}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                    isLoadingOlder ? (
+                        <View style={{ padding: 20, alignItems: 'center' }}>
+                            <ActivityIndicator size="small" color={theme.primary} />
+                        </View>
+                    ) : null
+                }
             />
 
             {/* FAB for Owner */}

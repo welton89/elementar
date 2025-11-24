@@ -90,6 +90,11 @@ export default function RoomScreen() {
     }, []); // Array vazio = calcula apenas uma vez
 
     if (isMural && room && client) {
+        const handleRefresh = async () => {
+            // Recarrega as mensagens mais recentes
+            await loadOlderMessages();
+        };
+
         return (
             <MuralView
                 roomId={roomId}
@@ -98,6 +103,9 @@ export default function RoomScreen() {
                 messages={messages}
                 onSendImage={sendImage}
                 onSendVideo={sendVideo}
+                loadOlderMessages={loadOlderMessages}
+                isLoadingOlder={isLoadingOlder}
+                onRefresh={handleRefresh}
             />
         );
     }
