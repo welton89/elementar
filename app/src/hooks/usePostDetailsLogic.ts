@@ -95,6 +95,50 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
 
         loadPostAndComments();
 
+        // Listener para novos comentários em tempo real
+        const room = client.getRoom(roomId);
+        if (room) {
+            const handleNewComment = (event: MatrixEvent, roomContext: any) => {
+                if (roomContext.roomId !== roomId) return;
+
+                // Verifica se é um comentário (thread reply) para este post
+                const relatesTo = event.getContent()['m.relates_to'];
+                if (relatesTo && relatesTo.event_id === eventId && relatesTo.rel_type === 'm.thread') {
+                    console.log('New comment detected in real-time:', event.getId());
+
+                    const senderId = event.getSender()!;
+                    const member = room.getMember(senderId);
+
+                    const newComment: SimpleMessage = {
+                        eventId: event.getId()!,
+                        senderId: senderId,
+                        senderName: member?.name || senderId,
+                        content: event.getContent().body || '',
+                        timestamp: event.getTs(),
+                        msgtype: event.getContent().msgtype || 'm.text',
+                        status: 'sent',
+                        isMe: senderId === client?.getUserId(),
+                        avatarUrl: member?.getMxcAvatarUrl() || undefined
+                    };
+
+                    // Adiciona o novo comentário se não existir
+                    setComments(prev => {
+                        const exists = prev.some(c => c.eventId === newComment.eventId);
+                        if (!exists) {
+                            return [...prev, newComment];
+                        }
+                        return prev;
+                    });
+                }
+            };
+
+            client.on('Room.timeline' as any, handleNewComment);
+
+            return () => {
+                client.removeListener('Room.timeline' as any, handleNewComment);
+            };
+        }
+
         return () => {
             // Cleanup listeners if needed
         };
