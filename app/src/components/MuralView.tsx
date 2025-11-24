@@ -7,7 +7,7 @@ import { MURAL_STATE_EVENT_TYPE } from '@src/types/rooms';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { MatrixClient, Room } from 'matrix-js-sdk';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -67,6 +67,8 @@ export const MuralView: React.FC<MuralViewProps> = ({
     const { width } = useWindowDimensions();
     const [isPosting, setIsPosting] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+    const loadedCountsRef = useRef(false); // Previne carregamento múltiplo
 
     const screenWidth = Dimensions.get('window').width;
     const columnWidth = screenWidth / 3;
@@ -153,13 +155,65 @@ export const MuralView: React.FC<MuralViewProps> = ({
 
     // Filter only images and videos for the grid, reversed to show newest first
     // Also filter out messages with temporary IDs (not yet confirmed by server)
-    const mediaMessages = messages
-        .filter(m => {
-            const isMedia = m.msgtype === 'm.image' || m.msgtype === 'm.video';
-            const isConfirmed = !m.eventId.startsWith('~') && !m.eventId.startsWith('temp_');
-            return isMedia && isConfirmed;
-        })
-        .reverse();
+    // Filtra apenas mensagens de mídia (imagens e vídeos) confirmadas
+    const mediaMessages = useMemo(() => {
+        return messages
+            .filter(m => {
+                const isMedia = m.msgtype === 'm.image' || m.msgtype === 'm.video';
+                const isConfirmed = !m.eventId.startsWith('~') && !m.eventId.startsWith('temp_');
+                return isMedia && isConfirmed;
+            })
+            .reverse();
+    }, [messages]);
+
+    // Carrega contagem de comentários para cada post (apenas uma vez quando mensagens carregam)
+    useEffect(() => {
+        if (!room || !client || mediaMessages.length === 0) return;
+
+        // Evita recarregar se já temos contagens
+        if (Object.keys(commentCounts).length > 0) return;
+
+        const loadCommentCounts = async () => {
+            console.log(`Loading comment counts for ${mediaMessages.length} posts...`);
+
+            // Carrega todas as contagens em PARALELO para ser mais rápido
+            const countPromises = mediaMessages.map(async (msg) => {
+                try {
+                    const thread = room.getThread(msg.eventId);
+                    if (thread) {
+                        return { eventId: msg.eventId, count: thread.timeline.length };
+                    } else {
+                        try {
+                            const response = await client.relations(roomId, msg.eventId, 'm.thread', null, { limit: 100 });
+                            return {
+                                eventId: msg.eventId,
+                                count: response?.events?.length || 0
+                            };
+                        } catch (err) {
+                            return { eventId: msg.eventId, count: 0 };
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error loading comment count for ${msg.eventId}:`, error);
+                    return { eventId: msg.eventId, count: 0 };
+                }
+            });
+
+            // Aguarda todas as requisições em paralelo
+            const results = await Promise.all(countPromises);
+
+            // Converte array de resultados para objeto
+            const counts: Record<string, number> = {};
+            results.forEach(result => {
+                counts[result.eventId] = result.count;
+            });
+
+            console.log('Comment counts loaded:', counts);
+            setCommentCounts(counts);
+        };
+
+        loadCommentCounts();
+    }, [messages.length, room, client, roomId]); // Usa messages.length em vez de mediaMessages
 
     // Format followers count (e.g. 1000 -> 1 Mil)
     const formatFollowers = (count: number) => {
@@ -378,7 +432,7 @@ export const MuralView: React.FC<MuralViewProps> = ({
                 options={{
                     headerTitle: () => (
                         <TouchableOpacity
-                            onPress={() => router.push(`/room-settings/${roomId}`)}
+                            onPress={() => router.push(`/room/${roomId}/settings` as any)}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
                         >
                             {room.getMxcAvatarUrl() ? (
@@ -425,9 +479,10 @@ export const MuralView: React.FC<MuralViewProps> = ({
                                 console.log('Cannot open post with temporary event ID:', msg.eventId);
                                 return;
                             }
-                            router.push(`/room/${roomId}/post/${msg.eventId}`);
+                            router.push(`/room/${roomId}/post/${msg.eventId}` as any);
                         }}
                         onPeekChange={setIsModalOpen}
+                        commentCount={commentCounts[item.eventId] || 0}
                     />
                 )}
                 ListHeaderComponent={renderHeader}

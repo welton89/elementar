@@ -5,16 +5,17 @@ import { useTheme } from '@src/contexts/ThemeContext';
 import { SimpleMessage } from '@src/types/chat';
 import { ResizeMode, Video } from 'expo-av';
 import React from 'react';
-import { Animated, Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface PostMuralProps {
     message: SimpleMessage;
     width: number;
     onPress: (message: SimpleMessage) => void;
     onPeekChange?: (isPeeking: boolean) => void;
+    commentCount?: number; // Quantidade de comentários
 }
 
-export const PostMural: React.FC<PostMuralProps> = ({ message, width, onPress, onPeekChange }) => {
+export const PostMural: React.FC<PostMuralProps> = ({ message, width, onPress, onPeekChange, commentCount = 0 }) => {
     const { theme } = useTheme();
     const [isPeeking, setIsPeeking] = React.useState(false);
     const opacity = React.useRef(new Animated.Value(0)).current;
@@ -113,6 +114,16 @@ export const PostMural: React.FC<PostMuralProps> = ({ message, width, onPress, o
                         </View>
                     </View>
                 )}
+
+                {/* Badge de comentários */}
+                {commentCount > 0 && (
+                    <View style={styles.commentBadge}>
+                        <Ionicons name="chatbubble" size={12} color="#fff" />
+                        <Text style={[styles.commentCountText, { fontSize: commentCount > 99 ? 8 : 10 }]}>
+                            {commentCount > 99 ? '99+' : commentCount}
+                        </Text>
+                    </View>
+                )}
             </Pressable>
 
             {/* Peek Modal */}
@@ -169,6 +180,21 @@ const styles = StyleSheet.create({
     fullScreenMedia: {
         minWidth: Dimensions.get('window').width,
         minHeight: Dimensions.get('window').height,
-
-    }
+    },
+    commentBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        borderRadius: 12,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    commentCountText: {
+        color: '#fff',
+        fontWeight: 'bold',
+    },
 });
