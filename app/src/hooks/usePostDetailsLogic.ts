@@ -16,6 +16,8 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
     const [inputText, setInputText] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const [isLiked, setIsLiked] = useState(false);
+    const [likeCount, setLikeCount] = useState(0);
 
     const flatListRef = useRef<FlatList>(null);
     const inputBottomAnim = useRef(new Animated.Value(0)).current;
@@ -86,6 +88,9 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
                     }
                 }
 
+                // Load initial like status
+                updateLikeStatus();
+
             } catch (error) {
                 console.error("Error loading post details:", error);
             } finally {
@@ -129,6 +134,15 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
                         }
                         return prev;
                     });
+                }
+
+                // Verifica se é uma reação ao post
+                if (relatesTo && relatesTo.event_id === eventId && relatesTo.rel_type === 'm.annotation') {
+                    // Ignora se for reação do próprio usuário (já atualizamos localmente)
+                    const userId = client.getUserId();
+                    if (event.getSender() !== userId) {
+                        updateLikeStatus();
+                    }
                 }
             };
 
@@ -201,6 +215,113 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
         setComments(mappedComments.reverse());
     };
 
+    // Atualiza o status de curtida do post
+    const updateLikeStatus = async () => {
+        if (!client || !roomId || !eventId) return;
+
+        try {
+            const room = client.getRoom(roomId);
+            if (!room) return;
+
+            const postEvent = room.findEventById(eventId);
+            if (!postEvent) return;
+
+            const userId = client.getUserId();
+            let totalLikes = 0;
+            let userLiked = false;
+
+            // Tenta buscar reações agregadas do servidor
+            const relations = postEvent.getServerAggregatedRelation('m.annotation');
+
+            if (relations) {
+                const likeKey = '❤️';
+                if (relations[likeKey]) {
+                    totalLikes = relations[likeKey].count || 0;
+                    const senders = relations[likeKey].senders || [];
+                    userLiked = senders.includes(userId);
+                }
+            } else {
+                // Fallback: busca reações manualmente na timeline
+                const timeline = room.getLiveTimeline();
+                const events = timeline.getEvents();
+
+                const likeEvents = events.filter((evt: MatrixEvent) => {
+                    const content = evt.getContent();
+                    const relatesTo = content['m.relates_to'];
+                    return (
+                        evt.getType() === 'm.reaction' &&
+                        relatesTo?.event_id === eventId &&
+                        relatesTo?.key === '❤️'
+                    );
+                });
+
+                totalLikes = likeEvents.length;
+                userLiked = likeEvents.some((evt: MatrixEvent) => evt.getSender() === userId);
+            }
+
+            console.log('Like status:', { totalLikes, userLiked, userId });
+            setLikeCount(totalLikes);
+            setIsLiked(userLiked);
+        } catch (error) {
+            console.error('Error updating like status:', error);
+        }
+    };
+
+    const handleLike = async () => {
+        if (!client || !roomId || !eventId) return;
+
+        try {
+            await client.sendEvent(roomId, 'm.reaction', {
+                'm.relates_to': {
+                    rel_type: 'm.annotation',
+                    event_id: eventId,
+                    key: '❤️'
+                }
+            });
+
+            // Atualiza estado local imediatamente
+            setIsLiked(true);
+            setLikeCount(prev => prev + 1);
+        } catch (error) {
+            console.error('Error liking post:', error);
+        }
+    };
+
+    const handleUnlike = async () => {
+        if (!client || !roomId || !eventId) return;
+
+        try {
+            // Busca reações via API
+            const response = await client.relations(roomId, eventId, 'm.annotation', null, { limit: 100 });
+
+            if (response && response.events) {
+                const userId = client.getUserId();
+
+                // Encontra a reação de curtida do usuário
+                const userLikeReaction = response.events.find((evt: any) => {
+                    const content = evt.getContent();
+                    return (
+                        evt.getSender() === userId &&
+                        content['m.relates_to']?.key === '❤️'
+                    );
+                });
+
+                if (userLikeReaction) {
+                    // Remove a reação
+                    await client.redactEvent(roomId, userLikeReaction.getId());
+
+                    // Atualiza estado local imediatamente
+                    setIsLiked(false);
+                    setLikeCount(prev => Math.max(0, prev - 1));
+                } else {
+                    console.warn('User reaction not found');
+                }
+            }
+        } catch (error) {
+            console.error('Error unliking post:', error);
+        }
+    };
+
     const handleSendComment = async () => {
         if (!inputText.trim() || !client || !roomId || !eventId) return;
 
@@ -252,6 +373,10 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
         handleSendComment,
         keyboardHeight,
         inputBottomAnim,
-        flatListRef
+        flatListRef,
+        isLiked,
+        likeCount,
+        handleLike,
+        handleUnlike,
     };
 };

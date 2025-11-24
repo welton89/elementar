@@ -25,7 +25,11 @@ export default function PostDetailsScreen() {
         handleSendComment,
         keyboardHeight,
         inputBottomAnim,
-        flatListRef
+        flatListRef,
+        isLiked,
+        likeCount,
+        handleLike,
+        handleUnlike,
     } = usePostDetailsLogic({ client, roomId, eventId });
 
     // Hooks called unconditionally
@@ -40,9 +44,13 @@ export default function PostDetailsScreen() {
                 msgtype={content.msgtype || ''}
                 url={content.url}
                 theme={theme}
+                isLiked={isLiked}
+                likeCount={likeCount}
+                onLike={handleLike}
+                onUnlike={handleUnlike}
             />
         );
-    }, [postEvent, theme, isLoading]);
+    }, [postEvent, theme, isLoading, isLiked, likeCount, handleLike, handleUnlike]);
 
     const renderComment = React.useCallback(({ item }: { item: SimpleMessage }) => (
         <CommentItem item={item} theme={theme} />

@@ -1,51 +1,100 @@
+import { Ionicons } from '@expo/vector-icons';
 import { AuthenticatedImage } from '@src/components/AuthenticatedImage';
 import { AuthenticatedVideo } from '@src/components/AuthenticatedVideo';
 import { ResizeMode } from 'expo-av';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface PostHeaderProps {
     body: string;
     msgtype: string;
     url?: string;
     theme: any;
+    isLiked?: boolean;
+    likeCount?: number;
+    onLike?: () => void;
+    onUnlike?: () => void;
 }
 
-export const PostHeader = React.memo(({ body, msgtype, url, theme }: PostHeaderProps) => (
-    <View style={styles.postContainer}>
-        {/* Media */}
-        <View style={styles.mediaContainer}>
-            {msgtype === 'm.image' && url && (
-                <AuthenticatedImage
-                    mxcUrl={url}
-                    style={styles.media}
-                    resizeMode="contain"
-                />
-            )}
-            {msgtype === 'm.video' && url && (
-                <AuthenticatedVideo
-                    mxcUrl={url}
-                    style={styles.media}
-                    resizeMode={ResizeMode.CONTAIN}
-                    shouldPlay={true}
-                    useNativeControls={true}
-                />
-            )}
-        </View>
+export const PostHeader = React.memo(({ body, msgtype, url, theme, isLiked = false, likeCount = 0, onLike, onUnlike }: PostHeaderProps) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
 
-        {/* Caption */}
-        {body && !/\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|mkv|mp3|m4a)$/i.test(body) && (
-            <View style={styles.captionContainer}>
-                <Text style={[styles.caption, { color: theme.text }]}>
-                    {body}
-                </Text>
+    const handleLikePress = () => {
+        // Animação de "pop"
+        Animated.sequence([
+            Animated.timing(scaleAnim, {
+                toValue: 1.3,
+                duration: 100,
+                useNativeDriver: true,
+            }),
+            Animated.timing(scaleAnim, {
+                toValue: 1,
+                duration: 100,
+                useNativeDriver: true,
+            }),
+        ]).start();
+
+        if (isLiked) {
+            onUnlike?.();
+        } else {
+            onLike?.();
+        }
+    };
+
+    return (
+        <View style={styles.postContainer}>
+            {/* Media */}
+            <View style={styles.mediaContainer}>
+                {msgtype === 'm.image' && url && (
+                    <AuthenticatedImage
+                        mxcUrl={url}
+                        style={styles.media}
+                        resizeMode="contain"
+                    />
+                )}
+                {msgtype === 'm.video' && url && (
+                    <AuthenticatedVideo
+                        mxcUrl={url}
+                        style={styles.media}
+                        resizeMode={ResizeMode.CONTAIN}
+                        shouldPlay={true}
+                        useNativeControls={true}
+                    />
+                )}
             </View>
-        )}
 
-        <View style={[styles.divider, { backgroundColor: theme.border }]} />
-        <Text style={[styles.commentsTitle, { color: theme.textSecondary }]}>Comentários</Text>
-    </View>
-));
+            {/* Like button and count */}
+            <View style={styles.actionsContainer}>
+                <TouchableOpacity onPress={handleLikePress} activeOpacity={0.7}>
+                    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                        <Ionicons
+                            name={isLiked ? 'heart' : 'heart-outline'}
+                            size={28}
+                            color={isLiked ? '#ff3b30' : theme.text}
+                        />
+                    </Animated.View>
+                </TouchableOpacity>
+                {likeCount > 0 && (
+                    <Text style={[styles.likeCount, { color: theme.text }]}>
+                        {likeCount} {likeCount === 1 ? 'curtida' : 'curtidas'}
+                    </Text>
+                )}
+            </View>
+
+            {/* Caption */}
+            {body && !/\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|mkv|mp3|m4a)$/i.test(body) && (
+                <View style={styles.captionContainer}>
+                    <Text style={[styles.caption, { color: theme.text }]}>
+                        {body}
+                    </Text>
+                </View>
+            )}
+
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <Text style={[styles.commentsTitle, { color: theme.textSecondary }]}>Comentários</Text>
+        </View>
+    );
+});
 
 const styles = StyleSheet.create({
     postContainer: {
@@ -62,8 +111,20 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
+    actionsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        gap: 8,
+    },
+    likeCount: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
     captionContainer: {
         padding: 16,
+        paddingTop: 8,
     },
     caption: {
         fontSize: 16,
