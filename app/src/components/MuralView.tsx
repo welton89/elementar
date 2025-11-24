@@ -432,7 +432,7 @@ export const MuralView: React.FC<MuralViewProps> = ({
                 options={{
                     headerTitle: () => (
                         <TouchableOpacity
-                            onPress={() => router.push(`/room/${roomId}/settings` as any)}
+                            onPress={() => router.push(`/room-settings/${roomId}` as any)}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
                         >
                             {room.getMxcAvatarUrl() ? (
