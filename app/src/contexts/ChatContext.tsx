@@ -1,6 +1,6 @@
 // src/contexts/ChatContext.tsx (Versão Final para E2EE)
 
-import { EventType, MatrixEvent, MsgType, Room } from 'matrix-js-sdk';
+import { EventTimeline, EventType, MatrixEvent, MsgType, Room } from 'matrix-js-sdk';
 import { useCallback, useEffect, useState } from 'react';
 import { cacheService } from '../services/CacheService';
 import { notificationService } from '../services/NotificationService';
@@ -133,6 +133,8 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [room, setRoom] = useState<Room | null>(null);
+    const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+    const [lastReadEventId, setLastReadEventId] = useState<string | null>(null);
 
     // 1. EFEITO DE INICIALIZAÇÃO E CARREGAMENTO (Scrollback)
     useEffect(() => {
@@ -172,6 +174,16 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
         setRoom(currentRoom);
         setRoomName(currentRoom.name);
 
+        // Obtém a última mensagem lida pelo usuário
+        const userId = client.getUserId();
+        if (userId) {
+            const readUpToEvent = currentRoom.getEventReadUpTo(userId);
+            if (readUpToEvent) {
+                setLastReadEventId(readUpToEvent);
+                console.log('Last read event ID:', readUpToEvent);
+            }
+        }
+
         // Obtém URL do avatar da sala
         const mxcAvatarUrl = currentRoom.getAvatarUrl(client.baseUrl, 100, 100, 'crop');
         const avatarEvent = currentRoom.currentState.getStateEvents('m.room.avatar', '');
@@ -185,7 +197,7 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
             try {
                 console.log("DEBUG: Iniciando scrollback para buscar histórico...");
                 // Acesso forçado via as any (para client.scrollback)
-                const loaded = await (client as any).scrollback(currentRoom, 20);
+                const loaded = await (client as any).scrollback(currentRoom, 100);
 
                 if (!loaded) {
                     console.warn("Não foi possível carregar histórico (scrollback falhou).");
@@ -363,21 +375,52 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
         if (!room || messages.length === 0) return;
 
         // Pega o último evento da timeline da sala (que corresponde à última mensagem)
-        // Nota: 'messages' é nossa lista simplificada. Precisamos do MatrixEvent real.
-        // O objeto 'room' tem a timeline.
         const liveTimeline = room.getLiveTimeline();
         const events = liveTimeline.getEvents();
 
         if (events.length > 0) {
             const lastEvent = events[events.length - 1];
 
-            // Se o último evento não for nosso (opcional, mas geralmente marcamos tudo como lido)
-            // e se for uma mensagem que conta para unread (não é apenas um state event qualquer)
+            // Se o último evento for uma mensagem
             if (lastEvent.getType() === 'm.room.message' || lastEvent.getType() === 'm.room.encrypted') {
                 sendReadReceipt(lastEvent);
             }
         }
     }, [room, messages, sendReadReceipt]); // Executa quando mensagens mudam (novas mensagens)
+
+    // 5.1 LISTENER PARA ATUALIZAR LAST READ EVENT ID
+    useEffect(() => {
+        if (!client || !room) return;
+
+        const userId = client.getUserId();
+        if (!userId) return;
+
+        const handleReceiptEvent = (event: any, eventRoom: any) => {
+            console.log('Room.receipt event received');
+
+            // Verifica se o evento é da sala atual
+            if (eventRoom.roomId !== room.roomId) {
+                console.log('Receipt event from different room, ignoring');
+                return;
+            }
+
+            // Verifica se é um recibo de leitura do usuário atual
+            const content = event.getContent();
+            console.log('Receipt event content:', JSON.stringify(content));
+
+            if (content[userId] && content[userId]['m.read']) {
+                const newReadEventId = content[userId]['m.read'].event_id;
+                console.log('Read receipt updated to:', newReadEventId);
+                setLastReadEventId(newReadEventId);
+            }
+        };
+
+        client.on('Room.receipt' as any, handleReceiptEvent);
+
+        return () => {
+            client.removeListener('Room.receipt' as any, handleReceiptEvent);
+        };
+    }, [client, room]);
 
     // 6. LISTENERS DE EVENTOS (TIMELINE)
     useEffect(() => {
@@ -428,6 +471,31 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
             client.removeListener("Room.timeline" as any, timelineUpdateListener);
         };
     }, [client, room, roomId]);
+
+    // Event listeners for room metadata updates (name, avatar)
+    useEffect(() => {
+        if (!room) return;
+
+        const handleRoomStateEvents = (event: any) => {
+            const eventType = event.getType();
+
+            if (eventType === 'm.room.name') {
+                const newName = event.getContent().name || null;
+                setRoomName(newName);
+                console.log('Chat room name updated:', newName);
+            } else if (eventType === 'm.room.avatar') {
+                const newAvatarUrl = event.getContent().url || null;
+                setRoomAvatarUrl(newAvatarUrl);
+                console.log('Chat room avatar updated:', newAvatarUrl);
+            }
+        };
+
+        room.on('RoomState.events' as any, handleRoomStateEvents);
+
+        return () => {
+            room.removeListener('RoomState.events' as any, handleRoomStateEvents);
+        };
+    }, [room]);
 
 
     // 7. FUNÇÃO DE ENVIO DE IMAGEM
@@ -625,6 +693,69 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
         }
     }, [client, roomId]);
 
+    // 10. FUNÇÃO DE CARREGAR MENSAGENS ANTIGAS (SCROLL INFINITO)
+    const loadOlderMessages = useCallback(async (): Promise<boolean> => {
+        if (!client || !room || isLoadingOlder) return false;
+
+        setIsLoadingOlder(true);
+        try {
+            const timeline = room.getLiveTimeline();
+            const canPaginate = timeline.getPaginationToken(EventTimeline.BACKWARDS);
+
+            if (!canPaginate) {
+                console.log('No more messages to load');
+                return false;
+            }
+
+            console.log('Loading older messages...');
+            // Carrega mais 50 mensagens antigas
+            await (client as any).scrollback(room, 50);
+
+            const rawEvents = timeline.getEvents();
+            const messageMap = new Map<string, SimpleMessage>();
+
+            rawEvents.forEach(event => {
+                // Verifica se é uma edição
+                const relation = event.getRelation();
+                if (relation && relation.rel_type === 'm.replace' && relation.event_id) {
+                    const targetId = relation.event_id;
+                    if (messageMap.has(targetId)) {
+                        const original = messageMap.get(targetId)!;
+                        const newContent = event.getContent()['m.new_content'];
+                        if (newContent && newContent.body) {
+                            messageMap.set(targetId, {
+                                ...original,
+                                content: newContent.body,
+                                isEdited: true
+                            });
+                        }
+                    }
+                    return;
+                }
+
+                const simpleMsg = mapMatrixEventToSimpleMessage(event, room);
+                if (simpleMsg) {
+                    messageMap.set(simpleMsg.eventId, { ...simpleMsg, status: 'sent' as const });
+                }
+            });
+
+            const simpleMessages = Array.from(messageMap.values());
+            console.log(`Loaded ${simpleMessages.length} total messages after pagination`);
+
+            setMessages(simpleMessages);
+
+            // Salva no cache
+            cacheService.saveMessages(roomId!, simpleMessages as any[]);
+
+            return true;
+        } catch (error) {
+            console.error('Error loading older messages:', error);
+            return false;
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    }, [client, room, roomId, isLoadingOlder]);
+
     return {
         messages,
         roomName,
@@ -638,5 +769,8 @@ export const useChat = (roomId: string | undefined): ChatContextType => {
         sendVideo,
         deleteMessage,
         editMessage,
+        loadOlderMessages,
+        isLoadingOlder,
+        lastReadEventId,
     };
 };

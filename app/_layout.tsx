@@ -21,6 +21,7 @@ if (typeof Promise.withResolvers === 'undefined') {
 }
 
 // Polyfills básicos para Matrix SDK
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-polyfill-globals/src/crypto';
 import 'react-native-polyfill-globals/src/encoding';
 import 'react-native-polyfill-globals/src/readable-stream';
@@ -89,17 +90,19 @@ const RootLayout: React.FC = () => {
     }, []);
 
     return (
-        <AuthProvider>
-            <ThemeProvider>
-                {/* <AuthProviderNative> */}
-                {/* MatrixRustProvider disabled - requires full migration from matrix-js-sdk */}
-                {/* See /e2ee-test route for standalone E2EE test */}
-                {/* <MatrixRustProvider> */}
-                <RootNavigator />
-                {/* </MatrixRustProvider> */}
-                {/* </AuthProviderNative> */}
-            </ThemeProvider>
-        </AuthProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <AuthProvider>
+                <ThemeProvider>
+                    {/* <AuthProviderNative> */}
+                    {/* MatrixRustProvider disabled - requires full migration from matrix-js-sdk */}
+                    {/* See /e2ee-test route for standalone E2EE test */}
+                    {/* <MatrixRustProvider> */}
+                    <RootNavigator />
+                    {/* </MatrixRustProvider> */}
+                    {/* </AuthProviderNative> */}
+                </ThemeProvider>
+            </AuthProvider>
+        </GestureHandlerRootView>
     );
 };
 

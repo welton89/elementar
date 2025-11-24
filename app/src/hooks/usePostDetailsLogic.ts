@@ -64,8 +64,25 @@ export const usePostDetailsLogic = ({ client, roomId, eventId }: UsePostDetailsL
                         if (response && response.events) {
                             updateComments(response.events);
                         }
-                    } catch (err) {
-                        console.error("DEBUG: Error fetching relations:", err);
+                    } catch (err: any) {
+                        // Handle 404 errors gracefully - event might not be synced yet
+                        if (err?.errcode === 'M_NOT_FOUND' || err?.httpStatus === 404) {
+                            console.log("DEBUG: Event not found yet (404), it might be newly created. Will retry in 2 seconds...");
+                            // Retry after a delay for newly created posts
+                            setTimeout(async () => {
+                                try {
+                                    const response = await client.relations(roomId, eventId, 'm.thread', null, { limit: 50 });
+                                    if (response && response.events) {
+                                        updateComments(response.events);
+                                    }
+                                } catch (retryErr) {
+                                    console.log("DEBUG: Retry failed, no comments available yet:", retryErr);
+                                    // Silently fail - post exists but has no comments yet
+                                }
+                            }, 2000);
+                        } else {
+                            console.error("DEBUG: Error fetching relations:", err);
+                        }
                     }
                 }
 

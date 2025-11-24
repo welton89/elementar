@@ -4,10 +4,11 @@ import { MessageActionMenu } from '@src/components/MessageActionMenu';
 import { MessageInput } from '@src/components/MessageInput';
 import { MessageItem } from '@src/components/MessageItem';
 import { MuralView } from '@src/components/MuralView';
+import { UnreadMessagesSeparator } from '@src/components/UnreadMessagesSeparator';
 import { useChatRoomLogic } from '@src/hooks/useChatRoomLogic';
 import { MURAL_STATE_EVENT_TYPE } from '@src/types/rooms';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -38,7 +39,10 @@ export default function RoomScreen() {
         editMessage,
         isLoading,
         roomName,
-        roomAvatarUrl
+        roomAvatarUrl,
+        loadOlderMessages,
+        isLoadingOlder,
+        lastReadEventId,
     } = useChat(roomId);
 
     const { client } = useAuth();
@@ -69,6 +73,21 @@ export default function RoomScreen() {
 
     const room = client?.getRoom(roomId);
     const isMural = room?.currentState.getStateEvents(MURAL_STATE_EVENT_TYPE, '');
+
+    // Encontra o índice da última mensagem lida no array invertido
+    const reversedMessages = [...messages].reverse();
+    const lastReadIndex = lastReadEventId
+        ? reversedMessages.findIndex(msg => msg.eventId === lastReadEventId)
+        : -1;
+
+    // Calcula initialScrollIndex apenas uma vez (quando lastReadEventId é carregado pela primeira vez)
+    // Isso evita que o scroll fique pulando toda vez que lastReadEventId muda
+    const initialScrollIndex = useMemo(() => {
+        if (lastReadIndex > 0 && messages.length > 0) {
+            return lastReadIndex;
+        }
+        return 0;
+    }, []); // Array vazio = calcula apenas uma vez
 
     if (isMural && room && client) {
         return (
@@ -130,20 +149,47 @@ export default function RoomScreen() {
             ) : (
                 <FlatList
                     ref={flatListRef}
-                    data={messages}
-                    keyExtractor={(item) => item.eventId} // Use eventId which is stable
-                    renderItem={({ item }) => (
-                        <MessageItem
-                            message={item}
-                            isMe={item.senderId === userId}
-                            onLongPress={handleLongPressMessage}
-                        />
+                    data={reversedMessages}
+                    keyExtractor={(item) => item.eventId}
+                    renderItem={({ item, index }) => (
+                        <>
+                            <MessageItem
+                                message={item}
+                                isMe={item.senderId === userId}
+                                onLongPress={handleLongPressMessage}
+                            />
+                            {/* Renderiza separador após a última mensagem lida, 
+                                mas apenas se houver mensagens não lidas (lastReadIndex não é o primeiro item) */}
+                            {lastReadIndex !== -1 && lastReadIndex > 0 && index === lastReadIndex && (
+                                <UnreadMessagesSeparator />
+                            )}
+                        </>
                     )}
-                    contentContainerStyle={[styles.listContent, { paddingBottom: keyboardHeight + 80 }]}
-                    // Scroll to end only when content size changes (new message)
-                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-                    // Initial scroll
-                    onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                    inverted
+                    contentContainerStyle={[styles.listContent, { paddingTop: keyboardHeight + 80 }]}
+                    initialScrollIndex={initialScrollIndex}
+                    getItemLayout={(data, index) => ({
+                        length: 100,
+                        offset: 100 * index,
+                        index,
+                    })}
+                    onEndReached={async () => {
+                        if (!isLoadingOlder && !isLoading) {
+                            await loadOlderMessages();
+                        }
+                    }}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={
+                        isLoadingOlder ? (
+                            <View style={{ padding: 20, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={theme.primary} />
+                            </View>
+                        ) : null
+                    }
+                    maintainVisibleContentPosition={{
+                        minIndexForVisible: 0,
+                        autoscrollToTopThreshold: 10,
+                    }}
                 />
             )}
 

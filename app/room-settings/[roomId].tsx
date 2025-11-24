@@ -7,6 +7,7 @@ import {
     Modal,
     ScrollView,
     StyleSheet,
+    Switch,
     Text,
     TextInput,
     TouchableOpacity,
@@ -54,6 +55,25 @@ export default function RoomSettingsScreen() {
         handleKickMember,
         handleDeleteRoom,
         handleLeaveRoom,
+        // Topic
+        roomTopic,
+        isEditingTopic,
+        setIsEditingTopic,
+        newTopic,
+        setNewTopic,
+        canChangeTopic,
+        handleUpdateTopic,
+        // Visibility
+        isPublic,
+        canChangeVisibility,
+        handleToggleRoomVisibility,
+        // History Visibility
+        historyVisibleToNewMembers,
+        canChangeHistoryVisibility,
+        handleToggleHistoryVisibility,
+        // Member List
+        isMemberListExpanded,
+        setIsMemberListExpanded,
     } = useRoomSettingsLogic({ roomId });
 
     const renderMember = ({ item }: { item: RoomMember }) => (
@@ -152,6 +172,91 @@ export default function RoomSettingsScreen() {
                     </View>
                 </View>
 
+                {/* Topic/Description Section */}
+                <View style={[styles.section, { backgroundColor: theme.surface }]}>
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Descrição</Text>
+                    {isEditingTopic ? (
+                        <View style={styles.editTopicContainer}>
+                            <TextInput
+                                style={[styles.topicInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+                                value={newTopic}
+                                onChangeText={setNewTopic}
+                                placeholder="Digite a descrição da sala..."
+                                placeholderTextColor={theme.textTertiary}
+                                multiline
+                                numberOfLines={4}
+                                autoFocus
+                            />
+                            <View style={styles.editTopicActions}>
+                                <TouchableOpacity onPress={handleUpdateTopic} style={[styles.actionButton, { backgroundColor: theme.primary }]}>
+                                    <Ionicons name="checkmark" size={20} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setIsEditingTopic(false)} style={[styles.actionButton, { backgroundColor: theme.error }]}>
+                                    <Ionicons name="close" size={20} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
+                        <View>
+                            <Text style={[styles.topicText, { color: roomTopic ? theme.text : theme.textTertiary }]}>
+                                {roomTopic || 'Nenhuma descrição definida'}
+                            </Text>
+                            {canChangeTopic && (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setNewTopic(roomTopic);
+                                        setIsEditingTopic(true);
+                                    }}
+                                    style={[styles.editButton, { backgroundColor: theme.surfaceVariant }]}
+                                >
+                                    <Ionicons name="pencil" size={16} color={theme.primary} />
+                                    <Text style={[styles.editButtonText, { color: theme.primary }]}>Editar Descrição</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    )}
+                </View>
+
+                {/* Room Visibility Section */}
+                {canChangeVisibility && (
+                    <View style={[styles.section, { backgroundColor: theme.surface }]}>
+                        <View style={styles.settingRow}>
+                            <View style={styles.settingInfo}>
+                                <Text style={[styles.settingTitle, { color: theme.text }]}>Sala Pública</Text>
+                                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                                    {isPublic ? 'Qualquer pessoa pode entrar' : 'Apenas convidados podem entrar'}
+                                </Text>
+                            </View>
+                            <Switch
+                                value={isPublic}
+                                onValueChange={handleToggleRoomVisibility}
+                                trackColor={{ false: theme.border, true: theme.primary }}
+                                thumbColor="#fff"
+                            />
+                        </View>
+                    </View>
+                )}
+
+                {/* History Visibility Section */}
+                {canChangeHistoryVisibility && (
+                    <View style={[styles.section, { backgroundColor: theme.surface }]}>
+                        <View style={styles.settingRow}>
+                            <View style={styles.settingInfo}>
+                                <Text style={[styles.settingTitle, { color: theme.text }]}>Histórico Visível</Text>
+                                <Text style={[styles.settingDescription, { color: theme.textSecondary }]}>
+                                    {historyVisibleToNewMembers ? 'Novos membros veem mensagens antigas' : 'Novos membros só veem mensagens novas'}
+                                </Text>
+                            </View>
+                            <Switch
+                                value={historyVisibleToNewMembers}
+                                onValueChange={handleToggleHistoryVisibility}
+                                trackColor={{ false: theme.border, true: theme.primary }}
+                                thumbColor="#fff"
+                            />
+                        </View>
+                    </View>
+                )}
+
                 {/* Invite Section */}
                 {canInvite && (
                     <TouchableOpacity
@@ -163,17 +268,29 @@ export default function RoomSettingsScreen() {
                     </TouchableOpacity>
                 )}
 
-                {/* Members Section */}
+                {/* Members Section - Collapsible */}
                 <View style={[styles.section, { backgroundColor: theme.surface }]}>
-                    <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                        Membros ({members.length})
-                    </Text>
-                    <FlatList
-                        data={members}
-                        renderItem={renderMember}
-                        keyExtractor={(item) => item.userId}
-                        scrollEnabled={false}
-                    />
+                    <TouchableOpacity
+                        onPress={() => setIsMemberListExpanded(!isMemberListExpanded)}
+                        style={styles.collapsibleHeader}
+                    >
+                        <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                            Membros ({members.length})
+                        </Text>
+                        <Ionicons
+                            name={isMemberListExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={24}
+                            color={theme.text}
+                        />
+                    </TouchableOpacity>
+                    {isMemberListExpanded && (
+                        <FlatList
+                            data={members}
+                            renderItem={renderMember}
+                            keyExtractor={(item) => item.userId}
+                            scrollEnabled={false}
+                        />
+                    )}
                 </View>
 
                 {/* Danger Zone - Only for Admins */}
@@ -684,5 +801,66 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    // Topic styles
+    editTopicContainer: {
+        marginTop: 10,
+    },
+    topicInput: {
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        fontSize: 14,
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    editTopicActions: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 10,
+    },
+    topicText: {
+        fontSize: 14,
+        lineHeight: 20,
+        marginBottom: 10,
+    },
+    editButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        padding: 10,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+    },
+    editButtonText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    // Settings toggle styles
+    settingRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    settingInfo: {
+        flex: 1,
+        marginRight: 12,
+    },
+    settingTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    settingDescription: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    // Collapsible header
+    collapsibleHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: 10,
     },
 });

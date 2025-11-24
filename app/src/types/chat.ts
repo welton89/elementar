@@ -43,4 +43,7 @@ export interface ChatContextType {
     sendVideo: (uri: string, filename: string) => Promise<void>;
     deleteMessage: (eventId: string) => Promise<void>; // Adicionado
     editMessage: (eventId: string, newContent: string) => Promise<void>; // Adicionado
+    loadOlderMessages: () => Promise<boolean>; // Scroll infinito
+    isLoadingOlder: boolean; // Estado de carregamento de mensagens antigas
+    lastReadEventId: string | null; // ID da última mensagem lida
 }

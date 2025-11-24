@@ -89,15 +89,10 @@ export default function RoomListScreen() {
 
         setProcessingInvite(roomId);
         try {
-
             await client.joinRoom(roomId);
-
-
-            // Força recarregar a lista de salas
-            setTimeout(() => {
-                loadRooms();
-                setProcessingInvite(null);
-            }, 500);
+            // Force reload rooms
+            loadRooms();
+            // Do not clear processingInvite immediately, let the list update handle it
         } catch (error: any) {
             console.error('Erro ao aceitar convite:', error);
             alert(`Falha ao aceitar convite: ${error.message || 'Erro desconhecido'}`);
@@ -113,15 +108,10 @@ export default function RoomListScreen() {
 
         setProcessingInvite(roomId);
         try {
-
             await client.leave(roomId);
-
-
-            // Força recarregar a lista de salas
-            setTimeout(() => {
-                loadRooms();
-                setProcessingInvite(null);
-            }, 500);
+            // Force reload rooms
+            loadRooms();
+            // Do not clear processingInvite immediately, let the list update handle it
         } catch (error: any) {
             console.error('Erro ao rejeitar convite:', error);
             alert(`Falha ao rejeitar convite: ${error.message || 'Erro desconhecido'}`);
@@ -299,7 +289,7 @@ export default function RoomListScreen() {
 
                     return (
                         <View style={{ width: screenWidth }}>
-                            <InviteList />
+                            {/* InviteList removed from here */}
 
                             {showSkeleton ? (
                                 <RoomListSkeleton count={8} />

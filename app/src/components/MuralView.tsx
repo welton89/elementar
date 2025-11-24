@@ -7,20 +7,28 @@ import { MURAL_STATE_EVENT_TYPE } from '@src/types/rooms';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { MatrixClient, Room } from 'matrix-js-sdk';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Animated,
     Dimensions,
     FlatList,
     Image,
     Modal,
+    Platform,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
+    UIManager,
     View,
     useWindowDimensions
 } from 'react-native';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface MuralViewProps {
     roomId: string;
@@ -136,7 +144,14 @@ export const MuralView: React.FC<MuralViewProps> = ({
     };
 
     // Filter only images and videos for the grid, reversed to show newest first
-    const mediaMessages = messages.filter(m => m.msgtype === 'm.image' || m.msgtype === 'm.video').reverse();
+    // Also filter out messages with temporary IDs (not yet confirmed by server)
+    const mediaMessages = messages
+        .filter(m => {
+            const isMedia = m.msgtype === 'm.image' || m.msgtype === 'm.video';
+            const isConfirmed = !m.eventId.startsWith('~') && !m.eventId.startsWith('temp_');
+            return isMedia && isConfirmed;
+        })
+        .reverse();
 
     // Format followers count (e.g. 1000 -> 1 Mil)
     const formatFollowers = (count: number) => {
@@ -151,9 +166,65 @@ export const MuralView: React.FC<MuralViewProps> = ({
 
     const [expandedDesc, setExpandedDesc] = useState(false);
     const [showExpandButton, setShowExpandButton] = useState(false);
+    const [collapsedHeight, setCollapsedHeight] = useState(0);
+    const [expandedHeight, setExpandedHeight] = useState(0);
+    const rotateAnim = useRef(new Animated.Value(0)).current;
+    const heightAnim = useRef(new Animated.Value(0)).current;
     const memberCount = room.getJoinedMemberCount();
-    const topic = room.currentState.getStateEvents('m.room.topic', '')?.getContent()?.topic || '';
-    const router = useRouter(); // Ensure useRouter is imported
+    const [topic, setTopic] = useState(room.currentState.getStateEvents('m.room.topic', '')?.getContent()?.topic || '');
+    const router = useRouter();
+
+    // Reset expand button state when topic changes
+    useEffect(() => {
+        setShowExpandButton(false);
+        setExpandedDesc(false);
+        setCollapsedHeight(0);
+        setExpandedHeight(0);
+        rotateAnim.setValue(0);
+        heightAnim.setValue(0);
+    }, [topic]);
+
+    // Animate rotation and height when expanding/collapsing
+    useEffect(() => {
+        if (collapsedHeight > 0 && expandedHeight > 0) {
+            Animated.parallel([
+                Animated.timing(rotateAnim, {
+                    toValue: expandedDesc ? 1 : 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(heightAnim, {
+                    toValue: expandedDesc ? expandedHeight : collapsedHeight,
+                    duration: 300,
+                    useNativeDriver: false,
+                }),
+            ]).start();
+        }
+    }, [expandedDesc, collapsedHeight, expandedHeight]);
+
+    const rotate = rotateAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '180deg'],
+    });
+
+    // Event listener for real-time topic updates
+    useEffect(() => {
+        const handleStateEvents = (event: any) => {
+            const eventType = event.getType();
+
+            if (eventType === 'm.room.topic') {
+                const newTopic = event.getContent().topic || '';
+                setTopic(newTopic);
+                console.log('Mural topic updated:', newTopic);
+            }
+        };
+
+        room.on('RoomState.events' as any, handleStateEvents);
+
+        return () => {
+            room.removeListener('RoomState.events' as any, handleStateEvents);
+        };
+    }, [room]);
 
     const renderHeader = () => (
         <View style={styles.headerContainer}>
@@ -190,12 +261,18 @@ export const MuralView: React.FC<MuralViewProps> = ({
 
                 <View style={styles.textInfo}>
                     <View style={styles.nameRow}>
-                        <Text style={[styles.muralName, { color: theme.text }]}>{room.name}</Text>
+                        <View style={[{ flexDirection: 'column' }]}>
+                            <Text style={[styles.muralName, { color: theme.text }]}>{room.name}</Text>
+                            <Text style={[styles.followersLabel, { color: theme.textSecondary }]}>
+                                by {creatorName}</Text>
+                        </View>
+
+
                         <View style={styles.followersContainer}>
                             <Text style={[styles.followersCount, { color: theme.text }]}>
                                 {formatFollowers(memberCount)}
                             </Text>
-                            <Text style={[styles.followersLabel, { color: theme.textSecondary}]}>
+                            <Text style={[styles.followersLabel, { color: theme.textSecondary }]}>
                                 seguidores
                             </Text>
                         </View>
@@ -206,22 +283,78 @@ export const MuralView: React.FC<MuralViewProps> = ({
             {/* Description */}
             {topic ? (
                 <View style={styles.descriptionContainer}>
-                    <Text
-                        style={[styles.description, { color: theme.text }]}
-                        numberOfLines={expandedDesc ? undefined : 3}
-                        onTextLayout={(e) => {
-                            if (e.nativeEvent.lines.length > 3) {
-                                setShowExpandButton(true);
+                    {/* Hidden text to measure full line count */}
+                    <View style={{ position: 'absolute', opacity: 0 }}>
+                        <Text
+                            style={[styles.description, { color: theme.text }]}
+                            onTextLayout={(e) => {
+                                const { lines } = e.nativeEvent;
+                                console.log('Full topic lines detected:', lines.length);
+                                if (lines.length > 3 && !showExpandButton) {
+                                    console.log('Setting showExpandButton to true');
+                                    setShowExpandButton(true);
+                                }
+                            }}
+                        >
+                            {topic}
+                        </Text>
+                    </View>
+
+                    {/* Measure collapsed height (3 lines) */}
+                    <View
+                        style={{ position: 'absolute', opacity: 0 }}
+                        onLayout={(e) => {
+                            const height = e.nativeEvent.layout.height;
+                            if (height > 0 && collapsedHeight === 0) {
+                                setCollapsedHeight(height);
+                                heightAnim.setValue(height);
                             }
                         }}
                     >
-                        {topic}
-                    </Text>
+                        <Text
+                            style={[styles.description, { color: theme.text }]}
+                            numberOfLines={3}
+                        >
+                            {topic}
+                        </Text>
+                    </View>
+
+                    {/* Measure expanded height (full text) */}
+                    <View
+                        style={{ position: 'absolute', opacity: 0 }}
+                        onLayout={(e) => {
+                            const height = e.nativeEvent.layout.height;
+                            if (height > 0 && expandedHeight === 0) {
+                                setExpandedHeight(height);
+                            }
+                        }}
+                    >
+                        <Text style={[styles.description, { color: theme.text }]}>
+                            {topic}
+                        </Text>
+                    </View>
+
+                    {/* Visible animated text */}
+                    <Animated.View style={{ height: heightAnim, overflow: 'hidden' }}>
+                        <Text
+                            style={[styles.description, { color: theme.text }]}
+                            numberOfLines={expandedDesc ? undefined : 3}
+                        >
+                            {topic}
+                        </Text>
+                    </Animated.View>
+
                     {showExpandButton && (
-                        <TouchableOpacity onPress={() => setExpandedDesc(!expandedDesc)}>
+                        <TouchableOpacity
+                            onPress={() => setExpandedDesc(!expandedDesc)}
+                            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
+                        >
                             <Text style={[styles.expandText, { color: theme.primary }]}>
                                 {expandedDesc ? 'Ver menos' : 'Ver mais'}
                             </Text>
+                            <Animated.View style={{ transform: [{ rotate }], marginLeft: 4 }}>
+                                <Ionicons name="chevron-down" size={16} color={theme.primary} />
+                            </Animated.View>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -229,8 +362,10 @@ export const MuralView: React.FC<MuralViewProps> = ({
         </View>
     );
 
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.container, { backgroundColor: theme.background, filter: isModalOpen ? 'blur(4px)' : 'none' }]}>
             <Stack.Screen
                 options={{
                     headerTitle: () => (
@@ -253,6 +388,8 @@ export const MuralView: React.FC<MuralViewProps> = ({
                             )}
                             <View>
                                 <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.text }}>{room.name || 'Mural'}</Text>
+                                <Text style={[styles.followersLabel, { color: theme.textSecondary }]}>
+                                    by {creatorName}</Text>
                             </View>
                         </TouchableOpacity>
                     ),
@@ -269,13 +406,21 @@ export const MuralView: React.FC<MuralViewProps> = ({
                 data={mediaMessages}
                 keyExtractor={item => item.eventId}
                 numColumns={3}
+                scrollEnabled={!isModalOpen}
+                //style={{ opacity: isModalOpen ? 1 : 1 }}
                 renderItem={({ item }) => (
                     <PostMural
                         message={item}
                         width={width / 3}
                         onPress={(msg) => {
+                            // Don't navigate if event ID is temporary (starts with ~)
+                            if (msg.eventId.startsWith('~') || msg.eventId.startsWith('temp_')) {
+                                console.log('Cannot open post with temporary event ID:', msg.eventId);
+                                return;
+                            }
                             router.push(`/room/${roomId}/post/${msg.eventId}`);
                         }}
+                        onPeekChange={setIsModalOpen}
                     />
                 )}
                 ListHeaderComponent={renderHeader}
@@ -331,6 +476,7 @@ export const MuralView: React.FC<MuralViewProps> = ({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        //filter: 'blur(2px)',
     },
     headerContainer: {
         marginBottom: 20,
@@ -444,6 +590,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         marginBottom: 15,
         resizeMode: 'cover',
+
     },
     captionInput: {
         padding: 10,

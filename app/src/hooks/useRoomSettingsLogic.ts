@@ -34,6 +34,23 @@ export const useRoomSettingsLogic = ({ roomId }: UseRoomSettingsLogicProps) => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
 
+    // Topic/Description
+    const [roomTopic, setRoomTopic] = useState('');
+    const [isEditingTopic, setIsEditingTopic] = useState(false);
+    const [newTopic, setNewTopic] = useState('');
+    const [canChangeTopic, setCanChangeTopic] = useState(false);
+
+    // Room Visibility
+    const [isPublic, setIsPublic] = useState(false);
+    const [canChangeVisibility, setCanChangeVisibility] = useState(false);
+
+    // History Visibility
+    const [historyVisibleToNewMembers, setHistoryVisibleToNewMembers] = useState(true);
+    const [canChangeHistoryVisibility, setCanChangeHistoryVisibility] = useState(false);
+
+    // Member List Collapse
+    const [isMemberListExpanded, setIsMemberListExpanded] = useState(false);
+
     useEffect(() => {
         if (!client || !roomId) return;
 
@@ -65,10 +82,30 @@ export const useRoomSettingsLogic = ({ roomId }: UseRoomSettingsLogicProps) => {
 
         const avatarLevel = powerLevelContent.events?.['m.room.avatar'] ?? stateDefault;
         const nameLevel = powerLevelContent.events?.['m.room.name'] ?? stateDefault;
+        const topicLevel = powerLevelContent.events?.['m.room.topic'] ?? stateDefault;
+        const joinRulesLevel = powerLevelContent.events?.['m.room.join_rules'] ?? stateDefault;
+        const historyVisibilityLevel = powerLevelContent.events?.['m.room.history_visibility'] ?? stateDefault;
 
         setCanChangeAvatar(userPowerLevel >= avatarLevel);
         setCanChangeName(userPowerLevel >= nameLevel);
         setCanInvite(userPowerLevel >= inviteLevel);
+        setCanChangeTopic(userPowerLevel >= topicLevel);
+        setCanChangeVisibility(userPowerLevel >= joinRulesLevel);
+        setCanChangeHistoryVisibility(userPowerLevel >= historyVisibilityLevel);
+
+        // Get room topic
+        const topicEvent = matrixRoom.currentState.getStateEvents('m.room.topic', '');
+        setRoomTopic(topicEvent?.getContent()?.topic || '');
+
+        // Get room visibility (join_rules)
+        const joinRulesEvent = matrixRoom.currentState.getStateEvents('m.room.join_rules', '');
+        const joinRule = joinRulesEvent?.getContent()?.join_rule || 'invite';
+        setIsPublic(joinRule === 'public');
+
+        // Get history visibility
+        const historyVisibilityEvent = matrixRoom.currentState.getStateEvents('m.room.history_visibility', '');
+        const historyVisibility = historyVisibilityEvent?.getContent()?.history_visibility || 'shared';
+        setHistoryVisibleToNewMembers(historyVisibility === 'shared' || historyVisibility === 'world_readable');
 
         // Get members
         loadMembers(matrixRoom);
@@ -76,6 +113,50 @@ export const useRoomSettingsLogic = ({ roomId }: UseRoomSettingsLogicProps) => {
         // Load recent users from DMs
         loadRecentUsers();
     }, [client, roomId]);
+
+    // Event listeners for real-time updates
+    useEffect(() => {
+        if (!room) return;
+
+        const handleStateEvents = (event: any) => {
+            const eventType = event.getType();
+
+            if (eventType === 'm.room.avatar') {
+                const newAvatarUrl = event.getContent().url || null;
+                setRoomAvatarUrl(newAvatarUrl);
+                console.log('Room avatar updated:', newAvatarUrl);
+            } else if (eventType === 'm.room.name') {
+                const newName = event.getContent().name || 'Sala sem nome';
+                setRoomName(newName);
+                console.log('Room name updated:', newName);
+            } else if (eventType === 'm.room.topic') {
+                const newTopic = event.getContent().topic || '';
+                setRoomTopic(newTopic);
+                console.log('Room topic updated:', newTopic);
+            } else if (eventType === 'm.room.join_rules') {
+                const joinRule = event.getContent().join_rule || 'invite';
+                setIsPublic(joinRule === 'public');
+                console.log('Room visibility updated:', joinRule);
+            } else if (eventType === 'm.room.history_visibility') {
+                const historyVisibility = event.getContent().history_visibility || 'shared';
+                setHistoryVisibleToNewMembers(historyVisibility === 'shared' || historyVisibility === 'world_readable');
+                console.log('History visibility updated:', historyVisibility);
+            }
+        };
+
+        const handleMembershipChange = () => {
+            console.log('Member list changed, reloading...');
+            loadMembers(room);
+        };
+
+        room.on('RoomState.events' as any, handleStateEvents);
+        room.on('RoomMember.membership' as any, handleMembershipChange);
+
+        return () => {
+            room.removeListener('RoomState.events' as any, handleStateEvents);
+            room.removeListener('RoomMember.membership' as any, handleMembershipChange);
+        };
+    }, [room]);
 
     const loadMembers = (matrixRoom: any) => {
         const memberEvents = matrixRoom.currentState.getStateEvents('m.room.member');
@@ -213,6 +294,42 @@ export const useRoomSettingsLogic = ({ roomId }: UseRoomSettingsLogicProps) => {
         } catch (error) {
             console.error('Erro ao atualizar nome:', error);
             Alert.alert('Erro', 'Falha ao atualizar nome da sala.');
+        }
+    };
+
+    const handleUpdateTopic = async () => {
+        try {
+            await client!.sendStateEvent(roomId, 'm.room.topic' as any, { topic: newTopic }, '');
+            setRoomTopic(newTopic);
+            setIsEditingTopic(false);
+            Alert.alert('Sucesso', 'Descrição da sala atualizada!');
+        } catch (error) {
+            console.error('Erro ao atualizar descrição:', error);
+            Alert.alert('Erro', 'Falha ao atualizar descrição da sala.');
+        }
+    };
+
+    const handleToggleRoomVisibility = async () => {
+        try {
+            const newJoinRule = isPublic ? 'invite' : 'public';
+            await client!.sendStateEvent(roomId, 'm.room.join_rules' as any, { join_rule: newJoinRule }, '');
+            setIsPublic(!isPublic);
+            Alert.alert('Sucesso', `Sala agora é ${!isPublic ? 'pública' : 'privada'}!`);
+        } catch (error) {
+            console.error('Erro ao alterar visibilidade:', error);
+            Alert.alert('Erro', 'Falha ao alterar visibilidade da sala.');
+        }
+    };
+
+    const handleToggleHistoryVisibility = async () => {
+        try {
+            const newVisibility = historyVisibleToNewMembers ? 'invited' : 'shared';
+            await client!.sendStateEvent(roomId, 'm.room.history_visibility' as any, { history_visibility: newVisibility }, '');
+            setHistoryVisibleToNewMembers(!historyVisibleToNewMembers);
+            Alert.alert('Sucesso', `Histórico ${!historyVisibleToNewMembers ? 'visível' : 'oculto'} para novos membros!`);
+        } catch (error) {
+            console.error('Erro ao alterar visibilidade do histórico:', error);
+            Alert.alert('Erro', 'Falha ao alterar visibilidade do histórico.');
         }
     };
 
@@ -395,5 +512,24 @@ export const useRoomSettingsLogic = ({ roomId }: UseRoomSettingsLogicProps) => {
         handleDeleteRoom,
         handleLeaveRoom,
         setSearchResults,
+        // Topic
+        roomTopic,
+        isEditingTopic,
+        setIsEditingTopic,
+        newTopic,
+        setNewTopic,
+        canChangeTopic,
+        handleUpdateTopic,
+        // Visibility
+        isPublic,
+        canChangeVisibility,
+        handleToggleRoomVisibility,
+        // History Visibility
+        historyVisibleToNewMembers,
+        canChangeHistoryVisibility,
+        handleToggleHistoryVisibility,
+        // Member List
+        isMemberListExpanded,
+        setIsMemberListExpanded,
     };
 };
